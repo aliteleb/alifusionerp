@@ -10,27 +10,6 @@
                     {{ __('Analyze branch data and performance') }}
                 </p>
             </div>
-            <div class="flex space-x-2">
-                @php
-                    $exportParams = array_filter([
-                        'status' => $this->status,
-                        'created_from' => $this->created_from,
-                        'created_to' => $this->created_to,
-                    ]);
-                @endphp
-                <a href="{{ route('reports.export', array_merge(['type' => 'branch', 'format' => 'pdf'], $exportParams)) }}" 
-                   class="inline-flex items-center px-3 py-1.5 text-xs font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded hover:bg-gray-50 dark:hover:bg-gray-700">
-                    {{ __('PDF') }}
-                </a>
-                <a href="{{ route('reports.export', array_merge(['type' => 'branch', 'format' => 'excel'], $exportParams)) }}" 
-                   class="inline-flex items-center px-3 py-1.5 text-xs font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded hover:bg-gray-50 dark:hover:bg-gray-700">
-                    {{ __('Excel') }}
-                </a>
-                <a href="{{ route('reports.export', array_merge(['type' => 'branch', 'format' => 'csv'], $exportParams)) }}" 
-                   class="inline-flex items-center px-3 py-1.5 text-xs font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded hover:bg-gray-50 dark:hover:bg-gray-700">
-                    {{ __('CSV') }}
-                </a>
-            </div>
         </div>
 
             {{-- Filters --}}
