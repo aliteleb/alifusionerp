@@ -1,0 +1,1121 @@
+---
+description: when exporting to csv across the project
+alwaysApply: false
+---
+# Ali Fusion ERP CSV Export Documentation
+
+## CSV Export Overview
+
+Ali Fusion ERP provides CSV export functionality with UTF-8 BOM support for Arabic text, optimized performance for large datasets, and proper field formatting.
+
+## CSV Export Features
+
+### UTF-8 BOM for Arabic Support
+```php
+private function exportCsv(string $type, array $data): StreamedResponse
+{
+    $filename = "{$type}-report-" . now()->format('Y-m-d') . '.csv';
+    
+    return response()->streamDownload(function () use ($data) {
+        $handle = fopen('php://output', 'w');
+        
+        // Add UTF-8 BOM for proper Arabic text
+        fwrite($handle, "\xEF\xBB\xBF");
+        
+        // Write headers
+        fputcsv($handle, $data['headers']);
+        
+        // Write data rows
+        foreach ($data['records'] as $record) {
+            fputcsv($handle, $record);
+        }
+        
+        fclose($handle);
+    }, $filename, [
+        'Content-Type' => 'text/csv; charset=UTF-8',
+        'Content-Disposition' => 'attachment; filename="' . $filename . '"',
+    ]);
+}
+```
+
+### CSV Data Formatting
+```php
+// Format data for CSV export
+private function formatCsvData(array $records): array
+{
+    return collect($records)->map(function ($record) {
+        return [
+            'ID' => $record->id,
+            __('Name') => $record->name,
+            __('Email') => $record->email,
+            __('Status') => $record->status,
+            __('Created At') => $record->created_at->format('Y-m-d H:i:s'),
+        ];
+    })->toArray();
+}
+```
+
+## CSV Export Implementation
+
+### Export Controller Method
+```php
+// app/Http/Controllers/ReportsController.php
+private function exportCsv(string $type, array $data): StreamedResponse
+{
+    $filename = "{$type}-report-" . now()->format('Y-m-d') . '.csv';
+    
+    // Prepare CSV headers
+    $headers = [
+        __('ID'),
+        __('Name'),
+        __('Email'),
+        __('Status'),
+        __('Created At'),
+    ];
+    
+    // Format records for CSV
+    $csvRecords = collect($data['records'])->map(function ($record) {
+        return [
+            $record->id,
+            $record->name,
+            $record->email,
+            $record->status,
+            $record->created_at->format('Y-m-d H:i:s'),
+        ];
+    })->toArray();
+    
+    return response()->streamDownload(function () use ($headers, $csvRecords) {
+        $handle = fopen('php://output', 'w');
+        
+        // Add UTF-8 BOM for proper Arabic text
+        fwrite($handle, "\xEF\xBB\xBF");
+        
+        // Write headers
+        fputcsv($handle, $headers);
+        
+        // Write data rows
+        foreach ($csvRecords as $record) {
+            fputcsv($handle, $record);
+        }
+        
+        fclose($handle);
+    }, $filename, [
+        'Content-Type' => 'text/csv; charset=UTF-8',
+        'Content-Disposition' => 'attachment; filename="' . $filename . '"',
+    ]);
+}
+```
+
+### All Reports CSV Export
+```php
+private function exportAllCsv(array $allData): StreamedResponse
+{
+    $filename = "all-reports-" . now()->format('Y-m-d') . '.csv';
+    
+    return response()->streamDownload(function () use ($allData) {
+        $handle = fopen('php://output', 'w');
+        
+        // Add UTF-8 BOM
+        fwrite($handle, "\xEF\xBB\xBF");
+        
+        $isFirstReport = true;
+        
+        foreach ($allData as $type => $reportData) {
+            if (!$isFirstReport) {
+                // Add separator between reports
+                fputcsv($handle, []);
+                fputcsv($handle, [__('Report Type') . ': ' . __(ucfirst($type))]);
+                fputcsv($handle, []);
+            }
+            
+            // Write headers
+            $headers = [
+                __('ID'),
+                __('Name'),
+                __('Email'),
+                __('Status'),
+                __('Created At'),
+            ];
+            fputcsv($handle, $headers);
+            
+            // Write data rows
+            foreach ($reportData['records'] as $record) {
+                fputcsv($handle, [
+                    $record->id,
+                    $record->name,
+                    $record->email,
+                    $record->status,
+                    $record->created_at->format('Y-m-d H:i:s'),
+                ]);
+            }
+            
+            $isFirstReport = false;
+        }
+        
+        fclose($handle);
+    }, $filename, [
+        'Content-Type' => 'text/csv; charset=UTF-8',
+        'Content-Disposition' => 'attachment; filename="' . $filename . '"',
+    ]);
+}
+```
+
+## CSV Export Standards
+
+### Required Headers
+```php
+// Set proper CSV headers
+return response()->streamDownload(function () use ($data) {
+    // CSV generation
+}, $filename, [
+    'Content-Type' => 'text/csv; charset=UTF-8',
+    'Content-Disposition' => 'attachment; filename="' . $filename . '"',
+]);
+```
+
+### UTF-8 BOM Implementation
+```php
+// Add UTF-8 BOM for proper Arabic text display
+fwrite($handle, "\xEF\xBB\xBF");
+```
+
+### Field Separator Configuration
+```php
+// Use comma as field separator (standard CSV)
+fputcsv($handle, $record);
+
+// For semicolon-separated values (European format)
+fputcsv($handle, $record, ';');
+
+// For tab-separated values
+fputcsv($handle, $record, "\t");
+```
+
+## Data Formatting Guidelines
+
+### Standard Field Formatting
+```php
+// Format different data types for CSV
+private function formatCsvRecord($record): array
+{
+    return [
+        'ID' => (string) $record->id,
+        'Name' => $record->name,
+        'Email' => $record->email,
+        'Status' => $record->status,
+        'Created At' => $record->created_at->format('Y-m-d H:i:s'),
+        'Amount' => number_format($record->amount, 2),
+        'Percentage' => $record->percentage . '%',
+        'Boolean' => $record->is_active ? 'Yes' : 'No',
+    ];
+}
+```
+
+### Date Formatting
+```php
+// Consistent date formatting
+private function formatDate($date): string
+{
+    if (!$date) return '';
+    
+    return $date->format('Y-m-d H:i:s');
+}
+
+// For date-only fields
+private function formatDateOnly($date): string
+{
+    if (!$date) return '';
+    
+    return $date->format('Y-m-d');
+}
+```
+
+### Number Formatting
+```php
+// Format numbers with proper decimal places
+private function formatNumber($number, $decimals = 2): string
+{
+    if (is_null($number)) return '';
+    
+    return number_format($number, $decimals);
+}
+
+// Format currency
+private function formatCurrency($amount, $currency = 'USD'): string
+{
+    if (is_null($amount)) return '';
+    
+    return number_format($amount, 2) . ' ' . $currency;
+}
+```
+
+### Text Sanitization
+```php
+// Sanitize text for CSV
+private function sanitizeText($text): string
+{
+    if (is_null($text)) return '';
+    
+    // Remove or escape special characters
+    $text = str_replace(["\r\n", "\r", "\n"], ' ', $text);
+    $text = trim($text);
+    
+    return $text;
+}
+```
+
+## Performance Optimization
+
+### Large Dataset Handling
+```php
+// Use chunking for very large datasets
+private function exportCsv(string $type, array $data): StreamedResponse
+{
+    $filename = "{$type}-report-" . now()->format('Y-m-d') . '.csv';
+    
+    return response()->streamDownload(function () use ($data) {
+        $handle = fopen('php://output', 'w');
+        
+        // Add UTF-8 BOM
+        fwrite($handle, "\xEF\xBB\xBF");
+        
+        // Write headers
+        fputcsv($handle, $data['headers']);
+        
+        // Process data in chunks
+        $chunkSize = 1000;
+        $offset = 0;
+        
+        do {
+            $chunk = array_slice($data['records'], $offset, $chunkSize);
+            
+            foreach ($chunk as $record) {
+                fputcsv($handle, $record);
+            }
+            
+            $offset += $chunkSize;
+            
+            // Flush output buffer
+            if (ob_get_level()) {
+                ob_flush();
+                flush();
+            }
+            
+        } while (count($chunk) === $chunkSize);
+        
+        fclose($handle);
+    }, $filename);
+}
+```
+
+### Memory Management
+```php
+// Set appropriate memory limits
+ini_set('memory_limit', '2048M');
+ini_set('max_execution_time', 600);
+
+// Use streaming to avoid loading all data into memory
+return response()->streamDownload(function () use ($data) {
+    // Stream data instead of loading all into memory
+}, $filename);
+```
+
+### Database Query Optimization
+```php
+// Use chunked queries for large datasets
+Model::chunk(1000, function ($records) use ($handle) {
+    foreach ($records as $record) {
+        fputcsv($handle, $this->formatCsvRecord($record));
+    }
+    
+    // Flush output buffer
+    if (ob_get_level()) {
+        ob_flush();
+        flush();
+    }
+});
+```
+
+## Multi-Language Support
+
+### Language Detection
+```php
+// Detect user language from multiple sources
+private function getUserLanguage(): string
+{
+    return session('locale') 
+        ?? request()->header('Accept-Language')
+        ?? request()->cookie('locale')
+        ?? app()->getLocale();
+}
+```
+
+### Translation in CSV Headers
+```php
+// Translate headers for CSV export
+private function getCsvHeaders(string $locale = null): array
+{
+    $locale = $locale ?? $this->getUserLanguage();
+    $original = app()->getLocale();
+    
+    app()->setLocale($locale);
+    
+    $headers = [
+        __('ID'),
+        __('Name'),
+        __('Email'),
+        __('Status'),
+        __('Created At'),
+    ];
+    
+    app()->setLocale($original);
+    
+    return $headers;
+}
+```
+
+### Locale-Specific Formatting
+```php
+// Format data based on locale
+private function formatCsvRecordForLocale($record, string $locale): array
+{
+    $original = app()->getLocale();
+    app()->setLocale($locale);
+    
+    $formatted = [
+        __('ID') => (string) $record->id,
+        __('Name') => $record->name,
+        __('Email') => $record->email,
+        __('Status') => __($record->status),
+        __('Created At') => $record->created_at->format('Y-m-d H:i:s'),
+    ];
+    
+    app()->setLocale($original);
+    
+    return array_values($formatted);
+}
+```
+
+## Best Practices
+
+### 1. Error Handling
+```php
+try {
+    return response()->streamDownload(function () use ($data) {
+        // CSV generation
+    }, $filename);
+} catch (\Exception $e) {
+    Log::error('CSV Export Failed', [
+        'error' => $e->getMessage(),
+        'trace' => $e->getTraceAsString(),
+    ]);
+    
+    return redirect()->back()->with('error', __('CSV export failed. Please try again.'));
+}
+```
+
+### 2. Data Validation
+```php
+// Validate data before CSV generation
+if (empty($data['records'])) {
+    return redirect()->back()->with('error', __('No data found for CSV export.'));
+}
+
+// Check data size
+if (count($data['records']) > 100000) {
+    return redirect()->back()->with('warning', __('Dataset too large. Please apply filters.'));
+}
+```
+
+### 3. File Naming
+```php
+// Generate descriptive filenames
+$filename = "{$type}-report-" . now()->format('Y-m-d-H-i-s') . '.csv';
+
+// Include user context
+$filename = "{$type}-report-{$user->name}-" . now()->format('Y-m-d') . '.csv';
+
+// Sanitize filename
+$filename = preg_replace('/[^a-zA-Z0-9\-_\.]/', '_', $filename);
+```
+
+### 4. Security
+```php
+// Sanitize all output data
+private function sanitizeCsvData(array $records): array
+{
+    return array_map(function($record) {
+        return [
+            'id' => (string) $record->id,
+            'name' => $this->sanitizeText($record->name),
+            'email' => $this->sanitizeText($record->email),
+            'status' => $this->sanitizeText($record->status),
+        ];
+    }, $records);
+}
+```
+
+### 5. Progress Tracking
+```php
+// For very large exports, consider progress tracking
+private function exportCsvWithProgress(string $type, array $data): StreamedResponse
+{
+    $filename = "{$type}-report-" . now()->format('Y-m-d') . '.csv';
+    
+    return response()->streamDownload(function () use ($data) {
+        $handle = fopen('php://output', 'w');
+        $totalRecords = count($data['records']);
+        $processedRecords = 0;
+        
+        // Add UTF-8 BOM
+        fwrite($handle, "\xEF\xBB\xBF");
+        
+        // Write headers
+        fputcsv($handle, $data['headers']);
+        
+        // Write data rows
+        foreach ($data['records'] as $record) {
+            fputcsv($handle, $record);
+            $processedRecords++;
+            
+            // Log progress every 1000 records
+            if ($processedRecords % 1000 === 0) {
+                Log::info("CSV Export Progress: {$processedRecords}/{$totalRecords}");
+            }
+        }
+        
+        fclose($handle);
+    }, $filename);
+}
+```
+
+## Troubleshooting
+
+### Common Issues
+
+1. **Arabic Text Not Displaying**
+   ```php
+   // Solution: Include UTF-8 BOM
+   fwrite($handle, "\xEF\xBB\xBF");
+   ```
+
+2. **Special Characters in Data**
+   ```php
+   // Solution: Use fputcsv for proper escaping
+   fputcsv($handle, $record);
+   ```
+
+3. **Memory Exhaustion**
+   ```php
+   // Solution: Use streaming and chunking
+   return response()->streamDownload(function () use ($data) {
+       // Stream data instead of loading all into memory
+   }, $filename);
+   ```
+
+4. **Download Issues**
+   ```php
+   // Solution: Set proper headers
+   return response()->streamDownload(function () use ($data) {
+       // CSV generation
+   }, $filename, [
+       'Content-Type' => 'text/csv; charset=UTF-8',
+       'Content-Disposition' => 'attachment; filename="' . $filename . '"',
+   ]);
+   ```
+
+### Performance Monitoring
+
+```php
+// Monitor memory usage
+$memoryUsage = memory_get_usage(true);
+$peakMemory = memory_get_peak_usage(true);
+
+// Monitor execution time
+$startTime = microtime(true);
+// ... CSV operations
+$executionTime = microtime(true) - $startTime;
+
+// Log performance metrics
+Log::info('CSV Export Performance', [
+    'memory_usage' => $memoryUsage,
+    'peak_memory' => $peakMemory,
+    'execution_time' => $executionTime,
+    'record_count' => count($records),
+]);
+```
+
+### Debugging Tips
+
+```php
+// Enable output buffering for debugging
+ob_start();
+
+// Generate CSV
+$handle = fopen('php://output', 'w');
+fwrite($handle, "\xEF\xBB\xBF");
+fputcsv($handle, ['ID', 'Name', 'Email']);
+fclose($handle);
+
+// Get output for debugging
+$output = ob_get_clean();
+Log::info('CSV Output', ['output' => $output]);
+```# Ali Fusion ERP CSV Export Documentation
+
+## CSV Export Overview
+
+Ali Fusion ERP provides CSV export functionality with UTF-8 BOM support for Arabic text, optimized performance for large datasets, and proper field formatting.
+
+## CSV Export Features
+
+### UTF-8 BOM for Arabic Support
+```php
+private function exportCsv(string $type, array $data): StreamedResponse
+{
+    $filename = "{$type}-report-" . now()->format('Y-m-d') . '.csv';
+    
+    return response()->streamDownload(function () use ($data) {
+        $handle = fopen('php://output', 'w');
+        
+        // Add UTF-8 BOM for proper Arabic text
+        fwrite($handle, "\xEF\xBB\xBF");
+        
+        // Write headers
+        fputcsv($handle, $data['headers']);
+        
+        // Write data rows
+        foreach ($data['records'] as $record) {
+            fputcsv($handle, $record);
+        }
+        
+        fclose($handle);
+    }, $filename, [
+        'Content-Type' => 'text/csv; charset=UTF-8',
+        'Content-Disposition' => 'attachment; filename="' . $filename . '"',
+    ]);
+}
+```
+
+### CSV Data Formatting
+```php
+// Format data for CSV export
+private function formatCsvData(array $records): array
+{
+    return collect($records)->map(function ($record) {
+        return [
+            'ID' => $record->id,
+            __('Name') => $record->name,
+            __('Email') => $record->email,
+            __('Status') => $record->status,
+            __('Created At') => $record->created_at->format('Y-m-d H:i:s'),
+        ];
+    })->toArray();
+}
+```
+
+## CSV Export Implementation
+
+### Export Controller Method
+```php
+// app/Http/Controllers/ReportsController.php
+private function exportCsv(string $type, array $data): StreamedResponse
+{
+    $filename = "{$type}-report-" . now()->format('Y-m-d') . '.csv';
+    
+    // Prepare CSV headers
+    $headers = [
+        __('ID'),
+        __('Name'),
+        __('Email'),
+        __('Status'),
+        __('Created At'),
+    ];
+    
+    // Format records for CSV
+    $csvRecords = collect($data['records'])->map(function ($record) {
+        return [
+            $record->id,
+            $record->name,
+            $record->email,
+            $record->status,
+            $record->created_at->format('Y-m-d H:i:s'),
+        ];
+    })->toArray();
+    
+    return response()->streamDownload(function () use ($headers, $csvRecords) {
+        $handle = fopen('php://output', 'w');
+        
+        // Add UTF-8 BOM for proper Arabic text
+        fwrite($handle, "\xEF\xBB\xBF");
+        
+        // Write headers
+        fputcsv($handle, $headers);
+        
+        // Write data rows
+        foreach ($csvRecords as $record) {
+            fputcsv($handle, $record);
+        }
+        
+        fclose($handle);
+    }, $filename, [
+        'Content-Type' => 'text/csv; charset=UTF-8',
+        'Content-Disposition' => 'attachment; filename="' . $filename . '"',
+    ]);
+}
+```
+
+### All Reports CSV Export
+```php
+private function exportAllCsv(array $allData): StreamedResponse
+{
+    $filename = "all-reports-" . now()->format('Y-m-d') . '.csv';
+    
+    return response()->streamDownload(function () use ($allData) {
+        $handle = fopen('php://output', 'w');
+        
+        // Add UTF-8 BOM
+        fwrite($handle, "\xEF\xBB\xBF");
+        
+        $isFirstReport = true;
+        
+        foreach ($allData as $type => $reportData) {
+            if (!$isFirstReport) {
+                // Add separator between reports
+                fputcsv($handle, []);
+                fputcsv($handle, [__('Report Type') . ': ' . __(ucfirst($type))]);
+                fputcsv($handle, []);
+            }
+            
+            // Write headers
+            $headers = [
+                __('ID'),
+                __('Name'),
+                __('Email'),
+                __('Status'),
+                __('Created At'),
+            ];
+            fputcsv($handle, $headers);
+            
+            // Write data rows
+            foreach ($reportData['records'] as $record) {
+                fputcsv($handle, [
+                    $record->id,
+                    $record->name,
+                    $record->email,
+                    $record->status,
+                    $record->created_at->format('Y-m-d H:i:s'),
+                ]);
+            }
+            
+            $isFirstReport = false;
+        }
+        
+        fclose($handle);
+    }, $filename, [
+        'Content-Type' => 'text/csv; charset=UTF-8',
+        'Content-Disposition' => 'attachment; filename="' . $filename . '"',
+    ]);
+}
+```
+
+## CSV Export Standards
+
+### Required Headers
+```php
+// Set proper CSV headers
+return response()->streamDownload(function () use ($data) {
+    // CSV generation
+}, $filename, [
+    'Content-Type' => 'text/csv; charset=UTF-8',
+    'Content-Disposition' => 'attachment; filename="' . $filename . '"',
+]);
+```
+
+### UTF-8 BOM Implementation
+```php
+// Add UTF-8 BOM for proper Arabic text display
+fwrite($handle, "\xEF\xBB\xBF");
+```
+
+### Field Separator Configuration
+```php
+// Use comma as field separator (standard CSV)
+fputcsv($handle, $record);
+
+// For semicolon-separated values (European format)
+fputcsv($handle, $record, ';');
+
+// For tab-separated values
+fputcsv($handle, $record, "\t");
+```
+
+## Data Formatting Guidelines
+
+### Standard Field Formatting
+```php
+// Format different data types for CSV
+private function formatCsvRecord($record): array
+{
+    return [
+        'ID' => (string) $record->id,
+        'Name' => $record->name,
+        'Email' => $record->email,
+        'Status' => $record->status,
+        'Created At' => $record->created_at->format('Y-m-d H:i:s'),
+        'Amount' => number_format($record->amount, 2),
+        'Percentage' => $record->percentage . '%',
+        'Boolean' => $record->is_active ? 'Yes' : 'No',
+    ];
+}
+```
+
+### Date Formatting
+```php
+// Consistent date formatting
+private function formatDate($date): string
+{
+    if (!$date) return '';
+    
+    return $date->format('Y-m-d H:i:s');
+}
+
+// For date-only fields
+private function formatDateOnly($date): string
+{
+    if (!$date) return '';
+    
+    return $date->format('Y-m-d');
+}
+```
+
+### Number Formatting
+```php
+// Format numbers with proper decimal places
+private function formatNumber($number, $decimals = 2): string
+{
+    if (is_null($number)) return '';
+    
+    return number_format($number, $decimals);
+}
+
+// Format currency
+private function formatCurrency($amount, $currency = 'USD'): string
+{
+    if (is_null($amount)) return '';
+    
+    return number_format($amount, 2) . ' ' . $currency;
+}
+```
+
+### Text Sanitization
+```php
+// Sanitize text for CSV
+private function sanitizeText($text): string
+{
+    if (is_null($text)) return '';
+    
+    // Remove or escape special characters
+    $text = str_replace(["\r\n", "\r", "\n"], ' ', $text);
+    $text = trim($text);
+    
+    return $text;
+}
+```
+
+## Performance Optimization
+
+### Large Dataset Handling
+```php
+// Use chunking for very large datasets
+private function exportCsv(string $type, array $data): StreamedResponse
+{
+    $filename = "{$type}-report-" . now()->format('Y-m-d') . '.csv';
+    
+    return response()->streamDownload(function () use ($data) {
+        $handle = fopen('php://output', 'w');
+        
+        // Add UTF-8 BOM
+        fwrite($handle, "\xEF\xBB\xBF");
+        
+        // Write headers
+        fputcsv($handle, $data['headers']);
+        
+        // Process data in chunks
+        $chunkSize = 1000;
+        $offset = 0;
+        
+        do {
+            $chunk = array_slice($data['records'], $offset, $chunkSize);
+            
+            foreach ($chunk as $record) {
+                fputcsv($handle, $record);
+            }
+            
+            $offset += $chunkSize;
+            
+            // Flush output buffer
+            if (ob_get_level()) {
+                ob_flush();
+                flush();
+            }
+            
+        } while (count($chunk) === $chunkSize);
+        
+        fclose($handle);
+    }, $filename);
+}
+```
+
+### Memory Management
+```php
+// Set appropriate memory limits
+ini_set('memory_limit', '2048M');
+ini_set('max_execution_time', 600);
+
+// Use streaming to avoid loading all data into memory
+return response()->streamDownload(function () use ($data) {
+    // Stream data instead of loading all into memory
+}, $filename);
+```
+
+### Database Query Optimization
+```php
+// Use chunked queries for large datasets
+Model::chunk(1000, function ($records) use ($handle) {
+    foreach ($records as $record) {
+        fputcsv($handle, $this->formatCsvRecord($record));
+    }
+    
+    // Flush output buffer
+    if (ob_get_level()) {
+        ob_flush();
+        flush();
+    }
+});
+```
+
+## Multi-Language Support
+
+### Language Detection
+```php
+// Detect user language from multiple sources
+private function getUserLanguage(): string
+{
+    return session('locale') 
+        ?? request()->header('Accept-Language')
+        ?? request()->cookie('locale')
+        ?? app()->getLocale();
+}
+```
+
+### Translation in CSV Headers
+```php
+// Translate headers for CSV export
+private function getCsvHeaders(string $locale = null): array
+{
+    $locale = $locale ?? $this->getUserLanguage();
+    $original = app()->getLocale();
+    
+    app()->setLocale($locale);
+    
+    $headers = [
+        __('ID'),
+        __('Name'),
+        __('Email'),
+        __('Status'),
+        __('Created At'),
+    ];
+    
+    app()->setLocale($original);
+    
+    return $headers;
+}
+```
+
+### Locale-Specific Formatting
+```php
+// Format data based on locale
+private function formatCsvRecordForLocale($record, string $locale): array
+{
+    $original = app()->getLocale();
+    app()->setLocale($locale);
+    
+    $formatted = [
+        __('ID') => (string) $record->id,
+        __('Name') => $record->name,
+        __('Email') => $record->email,
+        __('Status') => __($record->status),
+        __('Created At') => $record->created_at->format('Y-m-d H:i:s'),
+    ];
+    
+    app()->setLocale($original);
+    
+    return array_values($formatted);
+}
+```
+
+## Best Practices
+
+### 1. Error Handling
+```php
+try {
+    return response()->streamDownload(function () use ($data) {
+        // CSV generation
+    }, $filename);
+} catch (\Exception $e) {
+    Log::error('CSV Export Failed', [
+        'error' => $e->getMessage(),
+        'trace' => $e->getTraceAsString(),
+    ]);
+    
+    return redirect()->back()->with('error', __('CSV export failed. Please try again.'));
+}
+```
+
+### 2. Data Validation
+```php
+// Validate data before CSV generation
+if (empty($data['records'])) {
+    return redirect()->back()->with('error', __('No data found for CSV export.'));
+}
+
+// Check data size
+if (count($data['records']) > 100000) {
+    return redirect()->back()->with('warning', __('Dataset too large. Please apply filters.'));
+}
+```
+
+### 3. File Naming
+```php
+// Generate descriptive filenames
+$filename = "{$type}-report-" . now()->format('Y-m-d-H-i-s') . '.csv';
+
+// Include user context
+$filename = "{$type}-report-{$user->name}-" . now()->format('Y-m-d') . '.csv';
+
+// Sanitize filename
+$filename = preg_replace('/[^a-zA-Z0-9\-_\.]/', '_', $filename);
+```
+
+### 4. Security
+```php
+// Sanitize all output data
+private function sanitizeCsvData(array $records): array
+{
+    return array_map(function($record) {
+        return [
+            'id' => (string) $record->id,
+            'name' => $this->sanitizeText($record->name),
+            'email' => $this->sanitizeText($record->email),
+            'status' => $this->sanitizeText($record->status),
+        ];
+    }, $records);
+}
+```
+
+### 5. Progress Tracking
+```php
+// For very large exports, consider progress tracking
+private function exportCsvWithProgress(string $type, array $data): StreamedResponse
+{
+    $filename = "{$type}-report-" . now()->format('Y-m-d') . '.csv';
+    
+    return response()->streamDownload(function () use ($data) {
+        $handle = fopen('php://output', 'w');
+        $totalRecords = count($data['records']);
+        $processedRecords = 0;
+        
+        // Add UTF-8 BOM
+        fwrite($handle, "\xEF\xBB\xBF");
+        
+        // Write headers
+        fputcsv($handle, $data['headers']);
+        
+        // Write data rows
+        foreach ($data['records'] as $record) {
+            fputcsv($handle, $record);
+            $processedRecords++;
+            
+            // Log progress every 1000 records
+            if ($processedRecords % 1000 === 0) {
+                Log::info("CSV Export Progress: {$processedRecords}/{$totalRecords}");
+            }
+        }
+        
+        fclose($handle);
+    }, $filename);
+}
+```
+
+## Troubleshooting
+
+### Common Issues
+
+1. **Arabic Text Not Displaying**
+   ```php
+   // Solution: Include UTF-8 BOM
+   fwrite($handle, "\xEF\xBB\xBF");
+   ```
+
+2. **Special Characters in Data**
+   ```php
+   // Solution: Use fputcsv for proper escaping
+   fputcsv($handle, $record);
+   ```
+
+3. **Memory Exhaustion**
+   ```php
+   // Solution: Use streaming and chunking
+   return response()->streamDownload(function () use ($data) {
+       // Stream data instead of loading all into memory
+   }, $filename);
+   ```
+
+4. **Download Issues**
+   ```php
+   // Solution: Set proper headers
+   return response()->streamDownload(function () use ($data) {
+       // CSV generation
+   }, $filename, [
+       'Content-Type' => 'text/csv; charset=UTF-8',
+       'Content-Disposition' => 'attachment; filename="' . $filename . '"',
+   ]);
+   ```
+
+### Performance Monitoring
+
+```php
+// Monitor memory usage
+$memoryUsage = memory_get_usage(true);
+$peakMemory = memory_get_peak_usage(true);
+
+// Monitor execution time
+$startTime = microtime(true);
+// ... CSV operations
+$executionTime = microtime(true) - $startTime;
+
+// Log performance metrics
+Log::info('CSV Export Performance', [
+    'memory_usage' => $memoryUsage,
+    'peak_memory' => $peakMemory,
+    'execution_time' => $executionTime,
+    'record_count' => count($records),
+]);
+```
+
+### Debugging Tips
+
+```php
+// Enable output buffering for debugging
+ob_start();
+
+// Generate CSV
+$handle = fopen('php://output', 'w');
+fwrite($handle, "\xEF\xBB\xBF");
+fputcsv($handle, ['ID', 'Name', 'Email']);
+fclose($handle);
+
+// Get output for debugging
+$output = ob_get_clean();
+Log::info('CSV Output', ['output' => $output]);
+```

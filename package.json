@@ -1,0 +1,22 @@
+{
+    "private": true,
+    "type": "module",
+    "scripts": {
+        "build": "vite build",
+        "dev": "vite",
+        "deploy": "vite build && git add . && git commit -m 'updates' && git push",
+        "push": "git add . && git commit -m 'updates' && git push"
+    },
+    "devDependencies": {
+        "@tailwindcss/vite": "^4.1.13",
+        "axios": "^1.11.0",
+        "concurrently": "^9.0.1",
+        "laravel-vite-plugin": "^2.0.0",
+        "tailwindcss": "^4.1.13",
+        "vite": "^7.0.4"
+    },
+    "dependencies": {
+        "laravel-echo": "^2.2.4",
+        "pusher-js": "^8.4.0"
+    }
+}

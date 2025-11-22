@@ -1,0 +1,29 @@
+@import '../../../../vendor/filament/filament/resources/css/theme.css';
+
+@source '../../../../app/Filament/**/*';
+@source '../../../../resources/views/filament/**/*';
+
+/* Master Panel Login Page Styles
+.fi-main {
+    @apply flex items-center justify-center min-h-screen bg-gray-50 dark:bg-gray-900;
+}
+
+.fi-main > div {
+    @apply w-full max-w-md;
+}
+
+.fi-simple-page {
+    @apply bg-white dark:bg-gray-800 rounded-lg shadow-lg p-8;
+}
+
+.fi-simple-page form {
+    @apply space-y-6;
+}
+
+.fi-simple-page .fi-input-wrp {
+    @apply space-y-2;
+}
+
+.fi-simple-page .fi-btn {
+    @apply w-full justify-center;
+} */

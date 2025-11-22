@@ -1,0 +1,915 @@
+---
+description: when creating or editing reports
+alwaysApply: false
+---
+# Ali Fusion ERP Reports Documentation
+
+## Reports System Overview
+
+Ali Fusion ERP includes 11 comprehensive report pages that provide detailed analysis of different business aspects with advanced filtering, charting, and export capabilities.
+
+## Available Report Pages
+
+### 1. ClientReports
+**Purpose**: Analyze client data and performance
+**File**: `app/Filament/Pages/ClientReports.php`
+
+**Features**:
+- Branch filtering
+- Status filtering (active/inactive)
+- Date range filtering
+- Monthly registration charts
+- Branch statistics
+- Pagination support
+
+**Implementation**:
+```php
+class ClientReports extends Page
+{
+    protected static ?int $navigationSort = 1;
+    protected static string|\BackedEnum|null $navigationIcon = Heroicon::Users;
+    protected static string $view = 'filament.pages.client-reports';
+    
+    // URL-bound filter properties
+    #[Url] public $branch_id = '';
+    #[Url] public $status = 'all';
+    #[Url] public $created_from = '';
+    #[Url] public $created_to = '';
+    #[Url] public $perPage = 10;
+
+    public function getReportData(): array
+    {
+        $query = Client::query();
+
+        // Apply filters
+        if (!empty($this->branch_id)) {
+            $query->where('branch_id', $this->branch_id);
+        }
+
+        if (!empty($this->status) && $this->status !== 'all') {
+            $query->where('is_active', $this->status === 'active');
+        }
+
+        if (!empty($this->created_from)) {
+            $query->whereDate('created_at', '>=', $this->created_from);
+        }
+
+        if (!empty($this->created_to)) {
+            $query->whereDate('created_at', '<=', $this->created_to);
+        }
+
+        // Get paginated results
+        $clients = $query->with(['branch', 'clientGroup'])
+            ->paginate($this->perPage)
+            ->appends(request()->query());
+
+        return [
+            'clients' => $clients,
+            'total_clients' => $query->count(),
+            'active_clients' => $query->where('is_active', true)->count(),
+            'inactive_clients' => $query->where('is_active', false)->count(),
+            'branch_stats' => $query->with('branch')->get()->groupBy('branch.name')->map->count(),
+            'monthly_registrations' => $this->getMonthlyRegistrations(),
+        ];
+    }
+}
+```
+
+### 2. TaskReports
+**Purpose**: Analyze task data and performance
+**File**: `app/Filament/Pages/TaskReports.php`
+
+**Features**:
+- Status filtering
+- Priority filtering
+- Assignee filtering
+- Due date filtering
+- Completion statistics
+
+### 3. TicketReports
+**Purpose**: Analyze ticket data and performance
+**File**: `app/Filament/Pages/TicketReports.php`
+
+**Features**:
+- Status filtering
+- Priority filtering
+- Category filtering
+- Resolution time analysis
+- SLA compliance
+
+### 4. ProjectReports
+**Purpose**: Analyze project data and performance
+**File**: `app/Filament/Pages/ProjectReports.php`
+
+**Features**:
+- Status filtering
+- Category filtering
+- Progress tracking
+- Budget analysis
+- Timeline analysis
+
+### 5. DealReports
+**Purpose**: Analyze deal data and performance
+**File**: `app/Filament/Pages/DealReports.php`
+
+**Features**:
+- Stage filtering
+- Status filtering
+- Value analysis
+- Win/loss ratios
+- Sales performance
+
+### 6. OpportunityReports
+**Purpose**: Analyze opportunity data and performance
+**File**: `app/Filament/Pages/OpportunityReports.php`
+
+**Features**:
+- State filtering
+- Source filtering
+- Value analysis
+- Conversion rates
+- Pipeline analysis
+
+### 7. ContractReports
+**Purpose**: Analyze contract data and performance
+**File**: `app/Filament/Pages/ContractReports.php`
+
+**Features**:
+- Status filtering
+- Type filtering
+- Expiration tracking
+- Value analysis
+- Renewal rates
+
+### 8. ComplaintReports
+**Purpose**: Analyze complaint data and performance
+**File**: `app/Filament/Pages/ComplaintReports.php`
+
+**Features**:
+- Status filtering
+- Priority filtering
+- Resolution time
+- Category analysis
+- Trend analysis
+
+### 9. MarketingCampaignReports
+**Purpose**: Analyze marketing campaign performance
+**File**: `app/Filament/Pages/MarketingCampaignReports.php`
+
+**Features**:
+- Status filtering
+- Type filtering
+- ROI analysis
+- Conversion rates
+- Campaign effectiveness
+
+### 10. AnnouncementReports
+**Purpose**: Analyze announcement data and performance
+**File**: `app/Filament/Pages/AnnouncementReports.php`
+
+**Features**:
+- Status filtering
+- Type filtering
+- Reach analysis
+- Engagement metrics
+- Publication tracking
+
+### 11. BranchReports
+**Purpose**: Analyze branch data and performance
+**File**: `app/Filament/Pages/BranchReports.php`
+
+**Features**:
+- Activity filtering
+- Performance metrics
+- Resource utilization
+- Growth analysis
+
+## Report Features
+
+### Filtering System
+
+All reports support comprehensive filtering with URL binding for persistent state:
+
+```php
+// URL-bound properties for persistent filtering
+#[Url] public $branch_id = '';
+#[Url] public $status = 'all';
+#[Url] public $created_from = '';
+#[Url] public $created_to = '';
+#[Url] public $perPage = 10;
+
+public function applyFilters(): void
+{
+    // Filters are automatically applied via URL binding
+    $this->dispatch('recreate-charts', chartData: $this->getChartData());
+}
+```
+
+### Chart Integration
+
+Reports include interactive charts for data visualization:
+
+```php
+public function getChartDataProperty(): array
+{
+    return [
+        'status' => $statusStats,
+        'branches' => $branchStats->toArray(),
+        'monthly' => $monthlyRegistrations,
+    ];
+}
+```
+
+### Pagination
+
+All reports support pagination for performance:
+
+```php
+$clients = $query->with(['branch', 'clientGroup'])
+    ->paginate($perPage)
+    ->appends(request()->query());
+```
+
+### Export Integration
+
+Reports support export to Excel, PDF, and CSV formats:
+
+```php
+// Export buttons in report views
+<x-filament::button
+    wire:click="export('excel')"
+    icon="heroicon-o-arrow-down-tray"
+>
+    {{ __('Export to Excel') }}
+</x-filament::button>
+```
+
+## Report Development Guidelines
+
+### Creating New Reports
+
+1. **Create Report Page**:
+   ```bash
+   php artisan make:filament-page ReportName --type=page
+   ```
+
+2. **Implement Base Structure**:
+   ```php
+   class CustomReport extends Page
+   {
+       protected static ?int $navigationSort = 1;
+       protected static string|\BackedEnum|null $navigationIcon = Heroicon::ChartBar;
+       protected static string $view = 'filament.pages.custom-report';
+       
+       // URL-bound filter properties
+       #[Url] public $filter1 = '';
+       #[Url] public $filter2 = 'all';
+       
+       public function mount(): void
+       {
+           // Initialize properties with default values
+       }
+       
+       public function getReportData(): array
+       {
+           // Return report data
+       }
+   }
+   ```
+
+3. **Create Blade Template**:
+   ```blade
+   {{-- resources/views/filament/pages/custom-report.blade.php --}}
+   <div>
+       {{-- Filters --}}
+       <div class="mb-6">
+           <x-filament::input.wrapper>
+               <x-filament::input
+                   wire:model.live="filter1"
+                   placeholder="{{ __('Filter 1') }}"
+               />
+           </x-filament::input.wrapper>
+       </div>
+       
+       {{-- Charts --}}
+       <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+           {{-- Chart components --}}
+       </div>
+       
+       {{-- Data Table --}}
+       <div class="bg-white rounded-lg shadow">
+           {{-- Table content --}}
+       </div>
+   </div>
+   ```
+
+### Filter Implementation
+
+#### URL Binding
+```php
+#[Url] public $branch_id = '';
+#[Url] public $status = 'all';
+#[Url] public $date_range = '';
+```
+
+#### Filter Application
+```php
+public function applyFilters(): void
+{
+    // Filters are automatically applied via URL binding
+    $this->dispatch('recreate-charts', chartData: $this->getChartData());
+}
+```
+
+#### Filter Reset
+```php
+public function resetFilters(): void
+{
+    $this->branch_id = '';
+    $this->status = 'all';
+    $this->date_range = '';
+    $this->applyFilters();
+}
+```
+
+### Chart Integration
+
+#### Chart Data Preparation
+```php
+public function getChartDataProperty(): array
+{
+    $query = Model::query();
+    
+    // Apply filters
+    $this->applyFiltersToQuery($query);
+    
+    return [
+        'labels' => $this->getChartLabels(),
+        'datasets' => $this->getChartDatasets($query),
+    ];
+}
+```
+
+#### Chart Rendering
+```blade
+{{-- Chart component --}}
+<div class="bg-white rounded-lg shadow p-6">
+    <h3 class="text-lg font-semibold mb-4">{{ __('Chart Title') }}</h3>
+    <div class="h-64">
+        {{-- Chart implementation --}}
+    </div>
+</div>
+```
+
+### Performance Optimization
+
+#### Query Optimization
+```php
+// Use eager loading to avoid N+1 queries
+$records = $query->with(['relation1', 'relation2'])
+    ->paginate($perPage);
+
+// Use select to limit columns
+$records = $query->select(['id', 'name', 'status', 'created_at'])
+    ->get();
+
+// Use query scopes for common filters
+$records = Model::active()
+    ->inDateRange($start, $end)
+    ->paginate($perPage);
+```
+
+#### Caching
+```php
+public function getReportData(): array
+{
+    $cacheKey = "report-data-{$this->getClass()}-" . md5(serialize($this->getFilters()));
+    
+    return Cache::remember($cacheKey, 300, function () {
+        return $this->fetchReportData();
+    });
+}
+```
+
+#### Pagination
+```php
+// Use pagination for large datasets
+$records = $query->paginate($this->perPage)
+    ->appends(request()->query());
+
+// Provide per-page options
+public $perPageOptions = [10, 25, 50, 100];
+```
+
+### Best Practices
+
+1. **Use URL binding** for persistent filters
+2. **Implement proper pagination** for large datasets
+3. **Optimize database queries** to avoid performance issues
+4. **Use caching** for expensive calculations
+5. **Provide loading states** for better UX
+6. **Handle empty states** gracefully
+7. **Implement proper error handling**
+8. **Use consistent naming** conventions
+9. **Follow Filament v4 patterns** for consistency
+10. **Test reports** with different data scenarios
+
+### Troubleshooting
+
+#### Common Issues
+
+1. **Filters not working**: Check URL binding implementation
+2. **Charts not updating**: Verify chart data dispatch
+3. **Performance issues**: Enable pagination and caching
+4. **Memory problems**: Use chunking for large datasets
+5. **Export failures**: Check export route configuration
+
+#### Debugging Tips
+
+```php
+// Enable query logging
+DB::enableQueryLog();
+// ... report operations
+$queries = DB::getQueryLog();
+
+// Monitor memory usage
+$memoryUsage = memory_get_usage(true);
+$peakMemory = memory_get_peak_usage(true);
+
+// Log report data
+Log::info('Report Data', $this->getReportData());
+```
+
+### Navigation Configuration
+
+```php
+public static function getNavigationGroup(): ?string
+{
+    return __('Administration');
+}
+
+public static function getNavigationLabel(): string
+{
+    return __('Custom Report');
+}
+
+public static function getNavigationIcon(): string|\BackedEnum|null
+{
+    return Heroicon::ChartBar;
+}
+```# Ali Fusion ERP Reports Documentation
+
+## Reports System Overview
+
+Ali Fusion ERP includes 11 comprehensive report pages that provide detailed analysis of different business aspects with advanced filtering, charting, and export capabilities.
+
+## Available Report Pages
+
+### 1. ClientReports
+**Purpose**: Analyze client data and performance
+**File**: `app/Filament/Pages/ClientReports.php`
+
+**Features**:
+- Branch filtering
+- Status filtering (active/inactive)
+- Date range filtering
+- Monthly registration charts
+- Branch statistics
+- Pagination support
+
+**Implementation**:
+```php
+class ClientReports extends Page
+{
+    protected static ?int $navigationSort = 1;
+    protected static string|\BackedEnum|null $navigationIcon = Heroicon::Users;
+    protected static string $view = 'filament.pages.client-reports';
+    
+    // URL-bound filter properties
+    #[Url] public $branch_id = '';
+    #[Url] public $status = 'all';
+    #[Url] public $created_from = '';
+    #[Url] public $created_to = '';
+    #[Url] public $perPage = 10;
+
+    public function getReportData(): array
+    {
+        $query = Client::query();
+
+        // Apply filters
+        if (!empty($this->branch_id)) {
+            $query->where('branch_id', $this->branch_id);
+        }
+
+        if (!empty($this->status) && $this->status !== 'all') {
+            $query->where('is_active', $this->status === 'active');
+        }
+
+        if (!empty($this->created_from)) {
+            $query->whereDate('created_at', '>=', $this->created_from);
+        }
+
+        if (!empty($this->created_to)) {
+            $query->whereDate('created_at', '<=', $this->created_to);
+        }
+
+        // Get paginated results
+        $clients = $query->with(['branch', 'clientGroup'])
+            ->paginate($this->perPage)
+            ->appends(request()->query());
+
+        return [
+            'clients' => $clients,
+            'total_clients' => $query->count(),
+            'active_clients' => $query->where('is_active', true)->count(),
+            'inactive_clients' => $query->where('is_active', false)->count(),
+            'branch_stats' => $query->with('branch')->get()->groupBy('branch.name')->map->count(),
+            'monthly_registrations' => $this->getMonthlyRegistrations(),
+        ];
+    }
+}
+```
+
+### 2. TaskReports
+**Purpose**: Analyze task data and performance
+**File**: `app/Filament/Pages/TaskReports.php`
+
+**Features**:
+- Status filtering
+- Priority filtering
+- Assignee filtering
+- Due date filtering
+- Completion statistics
+
+### 3. TicketReports
+**Purpose**: Analyze ticket data and performance
+**File**: `app/Filament/Pages/TicketReports.php`
+
+**Features**:
+- Status filtering
+- Priority filtering
+- Category filtering
+- Resolution time analysis
+- SLA compliance
+
+### 4. ProjectReports
+**Purpose**: Analyze project data and performance
+**File**: `app/Filament/Pages/ProjectReports.php`
+
+**Features**:
+- Status filtering
+- Category filtering
+- Progress tracking
+- Budget analysis
+- Timeline analysis
+
+### 5. DealReports
+**Purpose**: Analyze deal data and performance
+**File**: `app/Filament/Pages/DealReports.php`
+
+**Features**:
+- Stage filtering
+- Status filtering
+- Value analysis
+- Win/loss ratios
+- Sales performance
+
+### 6. OpportunityReports
+**Purpose**: Analyze opportunity data and performance
+**File**: `app/Filament/Pages/OpportunityReports.php`
+
+**Features**:
+- State filtering
+- Source filtering
+- Value analysis
+- Conversion rates
+- Pipeline analysis
+
+### 7. ContractReports
+**Purpose**: Analyze contract data and performance
+**File**: `app/Filament/Pages/ContractReports.php`
+
+**Features**:
+- Status filtering
+- Type filtering
+- Expiration tracking
+- Value analysis
+- Renewal rates
+
+### 8. ComplaintReports
+**Purpose**: Analyze complaint data and performance
+**File**: `app/Filament/Pages/ComplaintReports.php`
+
+**Features**:
+- Status filtering
+- Priority filtering
+- Resolution time
+- Category analysis
+- Trend analysis
+
+### 9. MarketingCampaignReports
+**Purpose**: Analyze marketing campaign performance
+**File**: `app/Filament/Pages/MarketingCampaignReports.php`
+
+**Features**:
+- Status filtering
+- Type filtering
+- ROI analysis
+- Conversion rates
+- Campaign effectiveness
+
+### 10. AnnouncementReports
+**Purpose**: Analyze announcement data and performance
+**File**: `app/Filament/Pages/AnnouncementReports.php`
+
+**Features**:
+- Status filtering
+- Type filtering
+- Reach analysis
+- Engagement metrics
+- Publication tracking
+
+### 11. BranchReports
+**Purpose**: Analyze branch data and performance
+**File**: `app/Filament/Pages/BranchReports.php`
+
+**Features**:
+- Activity filtering
+- Performance metrics
+- Resource utilization
+- Growth analysis
+
+## Report Features
+
+### Filtering System
+
+All reports support comprehensive filtering with URL binding for persistent state:
+
+```php
+// URL-bound properties for persistent filtering
+#[Url] public $branch_id = '';
+#[Url] public $status = 'all';
+#[Url] public $created_from = '';
+#[Url] public $created_to = '';
+#[Url] public $perPage = 10;
+
+public function applyFilters(): void
+{
+    // Filters are automatically applied via URL binding
+    $this->dispatch('recreate-charts', chartData: $this->getChartData());
+}
+```
+
+### Chart Integration
+
+Reports include interactive charts for data visualization:
+
+```php
+public function getChartDataProperty(): array
+{
+    return [
+        'status' => $statusStats,
+        'branches' => $branchStats->toArray(),
+        'monthly' => $monthlyRegistrations,
+    ];
+}
+```
+
+### Pagination
+
+All reports support pagination for performance:
+
+```php
+$clients = $query->with(['branch', 'clientGroup'])
+    ->paginate($perPage)
+    ->appends(request()->query());
+```
+
+### Export Integration
+
+Reports support export to Excel, PDF, and CSV formats:
+
+```php
+// Export buttons in report views
+<x-filament::button
+    wire:click="export('excel')"
+    icon="heroicon-o-arrow-down-tray"
+>
+    {{ __('Export to Excel') }}
+</x-filament::button>
+```
+
+## Report Development Guidelines
+
+### Creating New Reports
+
+1. **Create Report Page**:
+   ```bash
+   php artisan make:filament-page ReportName --type=page
+   ```
+
+2. **Implement Base Structure**:
+   ```php
+   class CustomReport extends Page
+   {
+       protected static ?int $navigationSort = 1;
+       protected static string|\BackedEnum|null $navigationIcon = Heroicon::ChartBar;
+       protected static string $view = 'filament.pages.custom-report';
+       
+       // URL-bound filter properties
+       #[Url] public $filter1 = '';
+       #[Url] public $filter2 = 'all';
+       
+       public function mount(): void
+       {
+           // Initialize properties with default values
+       }
+       
+       public function getReportData(): array
+       {
+           // Return report data
+       }
+   }
+   ```
+
+3. **Create Blade Template**:
+   ```blade
+   {{-- resources/views/filament/pages/custom-report.blade.php --}}
+   <div>
+       {{-- Filters --}}
+       <div class="mb-6">
+           <x-filament::input.wrapper>
+               <x-filament::input
+                   wire:model.live="filter1"
+                   placeholder="{{ __('Filter 1') }}"
+               />
+           </x-filament::input.wrapper>
+       </div>
+       
+       {{-- Charts --}}
+       <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+           {{-- Chart components --}}
+       </div>
+       
+       {{-- Data Table --}}
+       <div class="bg-white rounded-lg shadow">
+           {{-- Table content --}}
+       </div>
+   </div>
+   ```
+
+### Filter Implementation
+
+#### URL Binding
+```php
+#[Url] public $branch_id = '';
+#[Url] public $status = 'all';
+#[Url] public $date_range = '';
+```
+
+#### Filter Application
+```php
+public function applyFilters(): void
+{
+    // Filters are automatically applied via URL binding
+    $this->dispatch('recreate-charts', chartData: $this->getChartData());
+}
+```
+
+#### Filter Reset
+```php
+public function resetFilters(): void
+{
+    $this->branch_id = '';
+    $this->status = 'all';
+    $this->date_range = '';
+    $this->applyFilters();
+}
+```
+
+### Chart Integration
+
+#### Chart Data Preparation
+```php
+public function getChartDataProperty(): array
+{
+    $query = Model::query();
+    
+    // Apply filters
+    $this->applyFiltersToQuery($query);
+    
+    return [
+        'labels' => $this->getChartLabels(),
+        'datasets' => $this->getChartDatasets($query),
+    ];
+}
+```
+
+#### Chart Rendering
+```blade
+{{-- Chart component --}}
+<div class="bg-white rounded-lg shadow p-6">
+    <h3 class="text-lg font-semibold mb-4">{{ __('Chart Title') }}</h3>
+    <div class="h-64">
+        {{-- Chart implementation --}}
+    </div>
+</div>
+```
+
+### Performance Optimization
+
+#### Query Optimization
+```php
+// Use eager loading to avoid N+1 queries
+$records = $query->with(['relation1', 'relation2'])
+    ->paginate($perPage);
+
+// Use select to limit columns
+$records = $query->select(['id', 'name', 'status', 'created_at'])
+    ->get();
+
+// Use query scopes for common filters
+$records = Model::active()
+    ->inDateRange($start, $end)
+    ->paginate($perPage);
+```
+
+#### Caching
+```php
+public function getReportData(): array
+{
+    $cacheKey = "report-data-{$this->getClass()}-" . md5(serialize($this->getFilters()));
+    
+    return Cache::remember($cacheKey, 300, function () {
+        return $this->fetchReportData();
+    });
+}
+```
+
+#### Pagination
+```php
+// Use pagination for large datasets
+$records = $query->paginate($this->perPage)
+    ->appends(request()->query());
+
+// Provide per-page options
+public $perPageOptions = [10, 25, 50, 100];
+```
+
+### Best Practices
+
+1. **Use URL binding** for persistent filters
+2. **Implement proper pagination** for large datasets
+3. **Optimize database queries** to avoid performance issues
+4. **Use caching** for expensive calculations
+5. **Provide loading states** for better UX
+6. **Handle empty states** gracefully
+7. **Implement proper error handling**
+8. **Use consistent naming** conventions
+9. **Follow Filament v4 patterns** for consistency
+10. **Test reports** with different data scenarios
+
+### Troubleshooting
+
+#### Common Issues
+
+1. **Filters not working**: Check URL binding implementation
+2. **Charts not updating**: Verify chart data dispatch
+3. **Performance issues**: Enable pagination and caching
+4. **Memory problems**: Use chunking for large datasets
+5. **Export failures**: Check export route configuration
+
+#### Debugging Tips
+
+```php
+// Enable query logging
+DB::enableQueryLog();
+// ... report operations
+$queries = DB::getQueryLog();
+
+// Monitor memory usage
+$memoryUsage = memory_get_usage(true);
+$peakMemory = memory_get_peak_usage(true);
+
+// Log report data
+Log::info('Report Data', $this->getReportData());
+```
+
+### Navigation Configuration
+
+```php
+public static function getNavigationGroup(): ?string
+{
+    return __('Administration');
+}
+
+public static function getNavigationLabel(): string
+{
+    return __('Custom Report');
+}
+
+public static function getNavigationIcon(): string|\BackedEnum|null
+{
+    return Heroicon::ChartBar;
+}
+```

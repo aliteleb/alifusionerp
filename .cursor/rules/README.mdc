@@ -1,0 +1,293 @@
+---
+description: pdf, excel, csv export, widgets, dashborad, reports
+alwaysApply: false
+---
+# Ali Fusion ERP Documentation Index
+
+## 📚 Overview
+
+This documentation is organized into focused files for better maintainability and easier navigation. Each file covers a specific aspect of the Ali Fusion ERP platform and includes comprehensive guidelines for when to use them.
+
+## 🎯 Quick Navigation Guide
+
+### When You Need Help With...
+
+| **Task/Issue** | **Read This File** | **Key Sections** |
+|---|---|---|
+| Dashboard layout, widget positioning | `dashboard.mdc` | Dashboard Structure, Widget Layout, Customization |
+| Creating/editing widgets | `widgets.mdc` | Widget Development Guidelines, Performance Optimization |
+| Report pages, filtering, charts | `reports.mdc` | Report Development, Filtering System, Chart Integration |
+| Excel exports, styling | `excel-export.mdc` | Professional Styling, Multi-language Support |
+| PDF exports, RTL support | `pdf-export.mdc` | RTL Support, PDF Templates, Arabic Text |
+| CSV exports, data formatting | `csv-export.mdc` | UTF-8 BOM, Data Formatting, Performance |
+
+## 📖 Documentation Files & Usage Guidelines
+
+### 1. Dashboard Documentation
+**File**: `dashboard.mdc`  
+**When to Use**: When working with dashboard layout, widget positioning, or dashboard customization
+**Read This When**:
+- Setting up or modifying the main dashboard
+- Adding new widgets to the dashboard
+- Troubleshooting dashboard layout issues
+- Implementing responsive design for dashboard
+- Optimizing dashboard performance
+- Understanding widget organization
+
+**Key Sections**:
+- Dashboard structure and layout
+- Widget organization and responsive grid
+- Customization options
+- Performance considerations
+- Troubleshooting common issues
+
+**Quick Access**: Look for "Dashboard Structure" and "Widget Layout" sections
+
+### 2. Widgets Documentation
+**File**: `widgets.mdc`  
+**When to Use**: When creating, editing, or troubleshooting any widget functionality
+**Read This When**:
+- Creating new widgets (`AlertsWidget`, `SalesPipelineWidget`, etc.)
+- Modifying existing widget behavior
+- Implementing widget data fetching
+- Adding widget interactions
+- Optimizing widget performance
+- Debugging widget display issues
+
+**Key Sections**:
+- All 6 widget implementations with code examples
+- Widget development guidelines
+- Performance optimization techniques
+- Best practices for widget design
+- Common troubleshooting scenarios
+
+**Quick Access**: Look for specific widget names (e.g., "AlertsWidget", "SalesPipelineWidget")
+
+### 3. Reports Documentation
+**File**: `reports.mdc`  
+**When to Use**: When working with any report page or report functionality
+**Read This When**:
+- Creating new report pages
+- Implementing report filtering systems
+- Adding charts to reports
+- Setting up report pagination
+- Integrating export functionality
+- Troubleshooting report performance issues
+
+**Key Sections**:
+- All 11 report pages with implementation details
+- URL binding for persistent filters
+- Chart integration patterns
+- Performance optimization strategies
+- Report development best practices
+
+**Quick Access**: Look for "Report Development Guidelines" and specific report names
+
+### 4. Excel Export Documentation
+**File**: `excel-export.mdc`  
+**When to Use**: When implementing or troubleshooting Excel export functionality
+**Read This When**:
+- Adding Excel export to any report or data view
+- Styling Excel exports with professional formatting
+- Implementing multi-language Excel exports
+- Handling large dataset exports
+- Troubleshooting Excel export issues
+- Adding multi-sheet Excel functionality
+
+**Key Sections**:
+- Complete Excel export implementation
+- Professional styling guidelines
+- Multi-language support patterns
+- Memory management for large exports
+- Performance optimization techniques
+
+**Quick Access**: Look for "Excel Export Implementation" and "Styling Guidelines"
+
+### 5. PDF Export Documentation
+**File**: `pdf-export.mdc`  
+**When to Use**: When implementing or troubleshooting PDF export functionality
+**Read This When**:
+- Adding PDF export to reports
+- Implementing RTL support for Arabic/Kurdish
+- Creating PDF templates
+- Handling PDF styling and formatting
+- Troubleshooting PDF generation issues
+- Optimizing PDF performance
+
+**Key Sections**:
+- RTL support implementation
+- PDF template structure
+- Multi-language PDF support
+- Performance optimization
+- Common PDF issues and solutions
+
+**Quick Access**: Look for "PDF Template Structure" and "RTL Support"
+
+### 6. CSV Export Documentation
+**File**: `csv-export.mdc`  
+**When to Use**: When implementing or troubleshooting CSV export functionality
+**Read This When**:
+- Adding CSV export to any data view
+- Implementing UTF-8 BOM for Arabic text
+- Handling large CSV exports
+- Formatting CSV data properly
+- Troubleshooting CSV download issues
+- Optimizing CSV export performance
+
+**Key Sections**:
+- UTF-8 BOM implementation
+- Data formatting guidelines
+- Performance optimization
+- Multi-language support
+- Common CSV issues and solutions
+
+**Quick Access**: Look for "UTF-8 BOM Implementation" and "Data Formatting"
+
+## 🔍 How to Find Help
+
+### By Problem Type
+
+#### **Layout & UI Issues**
+1. **Dashboard not displaying correctly** → `dashboard.mdc` → "Troubleshooting" section
+2. **Widget not showing** → `widgets.mdc` → "Common Issues" section
+3. **Report layout problems** → `reports.mdc` → "Report Development Guidelines"
+
+#### **Performance Issues**
+1. **Slow dashboard loading** → `dashboard.mdc` → "Performance Considerations"
+2. **Widget taking too long** → `widgets.mdc` → "Performance Optimization"
+3. **Report loading slowly** → `reports.mdc` → "Performance Optimization"
+4. **Export timeout** → Check export-specific files → "Memory Management"
+
+#### **Export Problems**
+1. **Excel export failing** → `excel-export.mdc` → "Troubleshooting" section
+2. **PDF not generating** → `pdf-export.mdc` → "Common Issues"
+3. **CSV download issues** → `csv-export.mdc` → "Troubleshooting"
+4. **Arabic text not displaying** → Check UTF-8 BOM sections in export files
+
+#### **Multi-Language Issues**
+1. **Arabic text not showing** → All export files → "Multi-Language Support"
+2. **RTL layout problems** → `pdf-export.mdc` → "RTL Support"
+3. **Translation not working** → Check "Translation" sections in relevant files
+
+### By Development Task
+
+#### **Creating New Components**
+1. **New Widget** → `widgets.mdc` → "Widget Development Guidelines"
+2. **New Report** → `reports.mdc` → "Report Development Guidelines"
+3. **New Export** → Choose appropriate export file → "Implementation" section
+
+#### **Modifying Existing Components**
+1. **Update Widget** → `widgets.mdc` → Find specific widget section
+2. **Update Report** → `reports.mdc` → Find specific report section
+3. **Update Export** → Choose appropriate export file → "Implementation" section
+
+#### **Adding Features**
+1. **Add filtering** → `reports.mdc` → "Filter Implementation"
+2. **Add charts** → `reports.mdc` → "Chart Integration"
+3. **Add export** → Choose appropriate export file → "Implementation"
+
+## 🚀 Quick Start Guide
+
+### For New Developers
+1. **Start with** `dashboard.mdc` to understand the overall structure
+2. **Read** `widgets.mdc` to understand component patterns
+3. **Check** `reports.mdc` for data display patterns
+4. **Review** export files when adding export functionality
+
+### For Specific Tasks
+1. **Dashboard work** → `dashboard.mdc`
+2. **Widget development** → `widgets.mdc`
+3. **Report creation** → `reports.mdc`
+4. **Export implementation** → Choose appropriate export file
+
+### For Troubleshooting
+1. **Identify the component type** (dashboard, widget, report, export)
+2. **Go to the relevant file**
+3. **Check the "Troubleshooting" or "Common Issues" section**
+4. **Follow the debugging tips provided**
+
+### Export Formats
+- **Excel (.xlsx)**: Professional styling, multi-sheet support
+- **PDF (.pdf)**: RTL support, print-ready reports
+- **CSV (.csv)**: UTF-8 BOM, raw data format
+
+## 🎯 Key Features
+
+### Multi-Language Support
+- English, Arabic, Kurdish
+- RTL layout support
+- Locale-specific formatting
+- Translation helpers
+
+### Performance Optimization
+- Memory management (2GB limit, 600s timeout)
+- Database query optimization
+- Chunked processing
+- Caching strategies
+
+### Security
+- Permission-based access
+- Data sanitization
+- Input validation
+- Audit logging
+
+## 💡 Best Practices
+
+### Development
+1. Use consistent naming conventions
+2. Follow Filament v4 patterns
+3. Implement proper error handling
+4. Optimize database queries
+5. Use caching for expensive operations
+
+### Performance
+1. Enable lazy loading for expensive widgets
+2. Use pagination for large datasets
+3. Implement proper memory management
+4. Use chunking for large exports
+5. Monitor performance metrics
+
+### User Experience
+1. Provide loading states
+2. Handle empty states gracefully
+3. Make components interactive
+4. Ensure responsive design
+5. Support multiple languages
+
+## 🔧 Troubleshooting
+
+### Common Issues
+- Memory exhaustion: Increase limits, use chunking
+- Arabic text display: Include UTF-8 BOM
+- Performance problems: Enable lazy loading, use caching
+- Export failures: Check route configuration
+- Layout issues: Verify responsive settings
+
+### Debugging Tips
+- Enable query logging
+- Monitor memory usage
+- Log performance metrics
+- Test with different data scenarios
+- Use browser developer tools
+
+## 🚀 Future Enhancements
+
+### Planned Features
+- Real-time dashboard updates
+- Advanced analytics
+- Enhanced export options
+- Interactive charts
+- Mobile optimization
+
+### Development Roadmap
+1. WebSocket integration for real-time updates
+2. Machine learning insights
+3. Custom report builders
+4. Scheduled exports
+5. Mobile-specific layouts
+
+---
+
+**💡 Pro Tip**: Use Ctrl+F (or Cmd+F) to search for specific terms within each documentation file. Each file is well-structured with clear headings to help you find exactly what you need quickly.
+
+**📞 Need Help?**: If you can't find what you're looking for, check the "Troubleshooting" section in the relevant file, or look for "Common Issues" and "Debugging Tips" sections.

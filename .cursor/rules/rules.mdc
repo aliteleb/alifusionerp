@@ -1,0 +1,729 @@
+---
+description:
+globs:
+alwaysApply: true
+---
+# Ali Fusion ERP Development Rules
+
+## Development Workflow Rules
+
+### Laravel-Specific Tools
+- **ALWAYS** create PHP test files in `agent-tests/` folder instead of using tinker
+- **ALWAYS** use MCP Server tools for database queries, config access, routes, and Laravel operations
+- **CRITICAL**: For tenant-specific models, **ALWAYS** connect to tenant database first using `TenantDatabaseService::connectToFacility($facility)`
+
+**Multi-Tenant Testing Template**:
+```php
+<?php
+require_once __DIR__ . '/../vendor/autoload.php';
+$app = require_once __DIR__ . '/../bootstrap/app.php';
+
+use App\Services\TenantDatabaseService;
+$facility = App\Models\Facility::first();
+TenantDatabaseService::connectToFacility($facility);
+
+use App\Models\Customer;
+$customers = Customer::all();
+```
+
+**Database Context**:
+- Master: Facility, User, master settings
+- Tenant: Customer, Branch, Employee, tenant-specific data
+- Always verify connection with `TenantDatabaseService::getCurrentTenantConnection()`
+
+### Code Quality and Formatting
+- **ALWAYS** run `./vendor/bin/pint --dirty` after code changes
+- Follow Laravel's PSR-12 standards, use meaningful names, add proper docblocks
+
+### Translation and Internationalization
+- **ALWAYS** wrap user-facing text with `__()` function
+- **NEVER** manually edit JSON files in `lang/` directory
+- **ALWAYS** run `php artisan sync:translations` after adding translatable text
+- Support English, Arabic, Kurdish with proper date/cultural localization
+- **Quote Handling**: Use double quotes for strings with apostrophes: `__("Customer's info")`
+- **Dynamic Language**: Detect user language from session/headers/cookies, not `app()->getLocale()`
+- **Exports**: Adapt to user's current language, use temporary locale switching
+
+### Date Formatting Standards
+- **ALWAYS** use `->translatedFormat()` instead of `->format()` for dates displayed to users
+- **NEVER** use `->format()` for user-facing date strings - it doesn't respect locale settings
+- **Use `->format()`** only for technical purposes (file names, database queries, API responses)
+- `->translatedFormat()` automatically formats dates according to the current locale (English, Arabic, Kurdish)
+
+**Date Formatting Examples:**
+```php
+// ✅ CORRECT - User-facing dates
+$date->translatedFormat('d M Y');        // "15 يناير 2024" (Arabic) or "15 Jan 2024" (English)
+$date->translatedFormat('l, F j, Y');   // "الاثنين، 15 يناير 2024" (Arabic) or "Monday, January 15, 2024" (English)
+$date->translatedFormat('Y-m-d H:i:s'); // Still works, but respects locale for month/day names
+
+// ✅ CORRECT - Technical purposes (file names, database, API)
+now()->format('Y-m-d-H-i-s');           // "2024-01-15-14-30-45" (always same format)
+$date->format('Y-m-d');                  // "2024-01-15" (for database queries)
+
+// ❌ INCORRECT - User-facing dates
+$date->format('d M Y');                  // Always English format, doesn't respect locale
+$date->format('l, F j, Y');             // Always English day/month names
+```
+
+### Database and Migration Rules
+- **ALWAYS** use `php artisan make:migration` (never manual creation)
+- Use proper foreign key constraints and indexes
+
+#### Migration File Placement Rules
+- **Master Migrations**: Place in `database/migrations/master/` for system-wide data
+  - **Models**: Facility, User, Role, Permission, system settings
+  - **Examples**: `create_facilities_table`, `create_users_table`, `create_roles_table`
+  - **Command**: Manually move to `master/` folder after creation with `make:migration`
+
+- **Tenant Migrations**: Place in `database/migrations/tenant/` for tenant-specific data
+  - **Models**: Customer, Branch, Employee, Opportunity, Task, Project, Ticket, etc.
+  - **Examples**: `create_customers_table`, `create_opportunities_table`, `create_tasks_table`
+  - **Command**: Manually move to `tenant/` folder after creation with `make:migration`
+
+- **Standard Migrations**: Keep in `database/migrations/` for shared/reference data
+  - **Models**: Country, Currency, Gender, MaritalStatus, etc.
+  - **Examples**: `create_countries_table`, `create_currencies_table`
+
+#### Migration Creation Workflow
+1. **Create migration**: `php artisan make:migration create_example_table`
+2. **Determine placement**: Based on model type (master/tenant/standard)
+3. **Move file**: Manually move from `database/migrations/` to appropriate subfolder
+4. **Update model**: Ensure model has correct database connection if needed
+5. **Run migration**: Use appropriate command (`master:migrate` or `tenant:migrate`)
+
+#### Multi-Tenant Migration & Seeding Commands
+- **Master DB**: `php artisan master:migrate` (system-wide data: facilities, users, settings)
+  - Options: `--fresh`, `--seed`, `--rollback`, `--step=N`, `--force`
+  - Master migrations in `database/migrations/master/`
+  - Automatically creates/seeds tenant DBs when using `--seed`
+
+- **Tenant DB**: `php artisan tenant:migrate` (tenant-specific data: customers, opportunities, tasks)
+  - Options: `--facility=subdomain`, `--fresh`, `--seed`, `--rollback`, `--step=N`, `--force`
+  - Tenant migrations in `database/migrations/tenant/`
+  - Migrates all facilities or specific facility by subdomain/ID
+
+- **Tenant Seeding**: `php artisan tenant:seed` (populate tenant data)
+  - Options: `--facility=subdomain`, `--class=seeder-name`, `--fresh`, `--force`
+  - Available seeders: reference, branches, clients, customers, departments, opportunities, tasks, etc.
+  - Uses `SeedFacilityDataAction` for complete seeding
+
+#### High-Volume Database Design:
+- Use proper data types (VARCHAR lengths, INT vs BIGINT)
+- Implement partitioning: `PARTITION BY RANGE (YEAR(created_at))`
+- Create covering indexes for common query patterns
+- Use foreign keys with ON DELETE CASCADE
+- Implement soft deletes with indexed `deleted_at`
+- Use UUID primary keys for distributed systems
+- **NEVER** create tables without indexes on foreign keys
+- **NEVER** use TEXT/BLOB in frequently queried tables
+
+### Form, Validation & Export Rules
+- **Forms**: Proper validation, loading states, clear feedback, accessibility
+- **Data Collection**: Customer privacy compliance, validate phone/email formats
+- **Multi-Language**: Support Arabic, Kurdish, English
+
+#### Data Export Standards:
+- **Excel**: Professional styling, color-coding, optimal column widths
+- **Language**: Respect user's session language, use locale detection fallbacks
+- **Memory**: 2GB limit, 600s execution time for large exports
+- **UTF-8**: Include BOM (`\xEF\xBB\xBF`) for Arabic text
+- **Fallback**: Provide CSV if Excel fails
+
+**Locale Helper**:
+```php
+private function translateText($key, $locale = 'en') {
+    $original = app()->getLocale();
+    app()->setLocale($locale);
+    $translation = __($key);
+    app()->setLocale($original);
+    return $translation;
+}
+```
+
+### Controller & Model Standards
+- **Controllers**: Thin controllers, business logic in services, proper HTTP codes, RESTful
+- **Models**: Proper relationships, mass assignment protection, accessors/mutators
+- **Performance**: Query scopes, eager loading, chunked queries (`Customer::chunk(1000)`), model caching
+- **Multi-Tenant**: Proper isolation and connection switching
+- **NEVER**: Load entire collections, use Eloquent for bulk operations
+
+#### Model Scope Standards
+- **ALWAYS** add `scopeActive()` method for models with `is_active` field:
+
+### PDF Generation Rules
+- **NEVER** use Livewire actions (UTF-8 serialization issues)
+- **ALWAYS** use dedicated web routes and controllers (`{Model}Controller`)
+- Use `niklasravnsborg\LaravelPdf` for Arabic text (not DomPDF)
+- Sanitize with `mb_convert_encoding()`, use `e()` helper
+- Route naming: `{model}.{action}.{type}` (e.g., `customer.report.download`)
+- Use Tajawal font, RTL layout for Arabic/Kurdish
+- Provide multiple formats: download, preview, print
+- Include `$is_pdf` variable for conditional elements
+
+**PDF Config**:
+```php
+$pdf = PDF::loadView('view-name', $data, [], ['format' => 'A4-P']);
+```
+
+### API Standards
+- Consistent JSON structure, proper auth/validation
+- Use Laravel API resources for transformation
+- **Ali Fusion ERP APIs**: Customer management, data export, tenant isolation
+- Implement rate limiting for data submission
+
+## Integration with Filament
+
+### Translation Standards
+- **ALWAYS** wrap all user-facing text with `__()` function
+- **NEVER** hardcode strings in resources, pages, or widgets
+- **ALWAYS** run `php artisan sync:translations` after adding translations
+- Use `getNavigationLabel()`, `getModelLabel()`, `getPluralModelLabel()` with translations
+
+**Resource Example**:
+```php
+class EmployeeResource extends Resource {
+    public static function getNavigationLabel(): string {
+        return __('Employees');
+    }
+    
+    public static function form(Form $form): Form {
+        return $form->schema([
+            TextInput::make('name')
+                ->label(__('Full Name'))
+                ->placeholder(__('e.g. John Doe')),
+            Select::make('department_id')
+                ->label(__('Department'))
+                ->relationship('department', 'name'),
+        ]);
+    }
+    
+    public static function table(Table $table): Table {
+        return $table->columns([
+            TextColumn::make('name')->label(__('Full Name')),
+            TextColumn::make('department.name')->label(__('Department')),
+        ])->recordActions([
+            Tables\Actions\EditAction::make()->label(__('Edit')),
+            Tables\Actions\DeleteAction::make()->label(__('Delete')),
+        ]);
+    }
+}
+```
+
+### Widget Standards
+- Use `getHeading()` method (not hardcoded `$heading` property)
+- Translate all titles, labels, descriptions
+- Use `Heroicon` enum for icons
+
+**Widget Example**:
+```php
+class DashboardStatsWidget extends BaseWidget {
+    protected function getStats(): array {
+        return [
+            Stat::make(__('Total Employees'), Employee::count())
+                ->description(__('Active employees'))
+                ->descriptionIcon(Heroicon::Users),
+            Stat::make(__('Departments'), Department::count())
+                ->descriptionIcon(Heroicon::BuildingOffice),
+        ];
+    }
+}
+```
+
+### Page, Action & Form Standards
+- **Pages**: Use `getTitle()`, translate form actions and notifications
+- **Actions**: Translate labels, modal content, confirmation messages
+- **Forms**: Use `label()`, `helperText()`, `placeholder()` with translations
+
+**Page Example**:
+```php
+class CreateEmployee extends CreateRecord {
+    public function getTitle(): string {
+        return __('Create Employee');
+    }
+    
+    protected function getCreatedNotificationTitle(): ?string {
+        return __('Employee created successfully');
+    }
+}
+```
+
+**Action Example**:
+```php
+Tables\Actions\Action::make('export')
+    ->label(__('Export Data'))
+    ->icon(Heroicon::ArrowDownTray)
+    ->modalHeading(__('Export Employee Data'))
+    ->modalSubmitActionLabel(__('Yes, Export'));
+```
+
+**Form Example**:
+```php
+Forms\Components\Section::make(__('Personal Information'))
+    ->schema([
+        TextInput::make('name')
+            ->label(__('Full Name'))
+            ->placeholder(__('Enter name')),
+        Select::make('gender')
+            ->label(__('Gender'))
+            ->options([
+                'male' => __('Male'),
+                'female' => __('Female'),
+            ]),
+    ]);
+```
+
+### Multi-Tenant & Best Practices
+- **Tenant Context**: Ensure components respect tenant isolation
+- **Consistent Terminology**: Use consistent translation keys
+- **Context-Aware Keys**: Use context in keys (e.g., 'employee.form.name')
+- **Testing**: Test components with different language settings
+
+### Notification Standards
+- **ALWAYS** use Filament's `Notification::make()` for database notifications
+- **ALWAYS** wrap notification text with `__()` function for translations
+- **ALWAYS** use `Context::add()` and `Context::remove()` for branch-specific notifications
+- **ALWAYS** use `sendToDatabase()` with `isEventDispatched: true` for proper event handling
+- **ALWAYS** query users with `withoutGlobalScopes()` when sending branch-specific notifications
+
+**Notification Pattern Example:**
+```php
+protected function afterCreate(): void
+{
+    DatabaseNotificationService::sendCreatedNotification(
+        record: $this->record,
+        modelType: 'Ticket',
+        titleField: 'subject',
+        icon: Heroicon::Ticket,
+        status: 'success',
+        resourceClass: TicketResource::class
+    );
+}
+```
+
+**Enhanced Notification Features:**
+- **Creator Information**: Shows who created the record
+- **User Avatars**: Displays creator's profile picture or initials in rounded circle
+- **Action URLs**: Includes View and Edit buttons in notifications
+- **Branch Context**: Only notifies users in the same branch
+- **User Exclusion**: Creator doesn't receive their own notifications
+- **Error Handling**: Gracefully handles URL generation failures
+- **Fallback Avatars**: Generates colorful initials avatars when no profile picture exists
+
+**DatabaseNotificationService Methods:**
+- `sendToBranch()` - Send notification to all users in a specific branch
+- `sendCreatedNotification()` - Send notification for created records with branch_id
+- `sendTaskCreatedNotification()` - Send notification for tasks (handles branch_id from related models)
+
+**Service Usage Guidelines:**
+1. **Use `sendCreatedNotification()`** for models with direct branch_id
+2. **Use `sendTaskCreatedNotification()`** for Task model (gets branch from project/ticket/opportunity)
+3. **Use `sendToBranch()`** for custom notifications
+4. **Always use Heroicon enums** instead of string icons
+5. **Choose appropriate status**: success, warning, danger, info
+6. **Authenticated user exclusion**: Users don't receive notifications for their own actions
+
+**Notification Guidelines:**
+1. **Use descriptive titles** that clearly indicate the action taken
+2. **Include relevant data** in the body using interpolation
+3. **Always clean up context** after sending notifications
+4. **Query efficiently** by selecting only necessary fields (`select('id')`)
+5. **Use proper scoping** to ensure notifications reach the right users
+
+## Filament v4 Rules
+
+### Key Changes
+- File visibility `private` by default
+- `deferFilters` is default behavior (use `deferFilters(false)` to disable)
+- Layout components don't span all columns by default
+- Actions renamed: `->actions()` → `->recordActions()`, `->bulkActions()` → `->toolbarActions()`
+- Layout moved to `Filament\Schemas\Components`
+- Icons use `Heroicon` enum (not strings)
+
+### Icons & Actions
+- **ALWAYS** use `Heroicon::UserGroup` instead of `'heroicon-o-user-group'`
+- **ALWAYS** use `->recordActions()` and `->toolbarActions()`
+
+```php
+// ✅ CORRECT
+->recordActions([Tables\Actions\EditAction::make()])
+->toolbarActions([BulkActionGroup::make([...])])
+->icon(Heroicon::UserGroup)
+
+// ❌ INCORRECT  
+->actions([...])  // Deprecated
+->bulkActions([...])  // Deprecated
+->icon('heroicon-o-user-group')  // String format
+```
+
+### Column Types
+- **NEVER** use `BadgeColumn` (deprecated in Filament v4)
+- **ALWAYS** use `TextColumn` with `->badge()` method instead
+
+### Component Namespaces  
+- **ALWAYS** use the correct namespaces for each component type:
+
+```php
+// ✅ CORRECT - Form Input Components
+use Filament\Forms\Components\TextInput;
+use Filament\Forms\Components\Select;
+use Filament\Forms\Components\Toggle;
+use Filament\Forms\Components\DatePicker;
+use Filament\Forms\Components\RichEditor;
+use Filament\Forms\Components\Hidden;
+
+// ✅ CORRECT - Layout/Schema/Infolists Components  
+use Filament\Schemas\Components\Grid;
+use Filament\Schemas\Components\Section;
+use Filament\Schemas\Components\Group;
+use Filament\Schemas\Components\Fieldset;
+use Filament\Schemas\Schema;
+
+// ✅ CORRECT - Infolists  
+use Filament\Infolists\Components\TextEntry;
+
+// ✅ CORRECT - Tables
+use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Table;
+
+// ❌ INCORRECT - Wrong namespaces
+use Filament\Schemas\Components\TextInput;  // Form inputs are not in Schemas
+use Filament\Tables\Columns\Layout\Split;  // Infolists uses Schemas for layout components
+```
+
+### Schema Method Signatures
+- **ALWAYS** use `Schema $schema` for schema configuration files:
+
+```php
+// ✅ CORRECT - Schema configuration
+public static function configure(Schema $schema): Schema
+{
+    return $schema->components([...]);
+}
+
+// ❌ INCORRECT - Wrong parameter/return type
+public static function configure(Form $form): Form  // Use Schema, not Form
+```
+
+### Modal Pattern
+- **Use modals** for simple resources (≤ 5-7 fields)
+- **Use pages** for complex forms, wizards, >7 fields
+- Place header actions in List page, not table configuration
+
+### Navigation Groups
+- **Administration**: Users, Roles, Departments, Designations, Customer Groups, Project Categories, Countries, Currencies, Genders, etc.
+- **Sales Management**: Opportunities (with open count badge)
+- **Project Management**: Tasks (with active count badge), Projects
+- **Client Management**: Customers, Clients
+- **Organization**: Warehouses, Branches
+- **Support/Service**: Tickets, Activity Logs
+
+### Table Filter Configuration Standards
+- **ALWAYS** use `filtersFormColumns()` matching the number of filters
+- **ALWAYS** use `deferFilters(false)` for immediate filter application
+- **ALWAYS** place branch filter as the first filter for consistency
+- **ALWAYS** order filters logically: Branch → Status → Type → Other filters
+
+**Filter Configuration Example:**
+```php
+->filters([
+    SelectFilter::make('branch_id')
+        ->label(__('Branch'))
+        ->relationship('branch', 'name', fn ($query) => $query->orderBy('id'))
+        ->searchable()
+        ->preload(),
+    
+    SelectFilter::make('status')
+        ->label(__('Status'))
+        ->multiple()
+        ->options([...]),
+    
+    SelectFilter::make('type')
+        ->label(__('Type'))
+        ->multiple()
+        ->options([...]),
+        
+    // Additional filters...
+])
+->filtersFormColumns(4) // Match number of filters
+->deferFilters(false)   // Apply filters immediately
+```
+
+### Table Column Configuration Standards
+- **ALWAYS** use branch name as the second main column (after primary identifier like name or title)
+- **ALWAYS** use icons for all or most columns to improve visual hierarchy
+- **ALWAYS** use proper badge styling for status and type columns
+- **ALWAYS** include sortable and searchable attributes where appropriate
+- **NEVER** use icon and color methods on an enum column like status cause it's being handled from the enum
+
+**Column Configuration Example:**
+```php
+->columns([
+    TextColumn::make('name') // Primary identifier
+        ->label(__('Name'))
+        ->icon(Heroicon::DocumentText)
+        ->searchable()
+        ->sortable(),
+        
+    TextColumn::make('branch.name') // Second column - ALWAYS branch
+        ->label(__('Branch'))
+        ->icon(Heroicon::BuildingOffice2)
+        ->badge()
+        ->color('info')
+        ->sortable(),
+        
+    TextColumn::make('status')
+        ->label(__('Status'))
+        ->badge()
+        ->sortable(),
+        
+    // Additional columns with icons...
+])
+```
+
+### Table Action Configuration Standards
+- **ALWAYS** use `IconButton()` for record actions to hide labels and show large icons
+- **ALWAYS** provide tooltips for icon-only actions for accessibility
+
+**Action Configuration Example:**
+```php
+->recordActions([
+    EditAction::make()
+        ->iconButton()
+        ->tooltip(__('Edit')),
+        
+    DeleteAction::make()
+        ->iconButton()
+        ->tooltip(__('Delete')),
+        
+    // Custom actions
+    Action::make('view')
+        ->iconButton()
+        ->icon(Heroicon::Eye)
+        ->tooltip(__('View Details'))
+        ->url(fn ($record) => route('resource.view', $record)),
+])
+```
+
+## Testing & Security Rules
+
+### Testing Standards
+- Write feature tests for major functionality (customer management, business operations)
+- Include unit tests for complex business logic
+- Test happy path and error scenarios
+- Use Laravel's testing helpers and factories
+- **ERP-Specific**: Test data validation, form submissions, exports, tenant isolation
+- Follow Laravel test structure (Feature/Unit), use descriptive method names
+
+### Security Standards
+- Use Laravel's built-in authentication and role-based access control
+- **ALWAYS** use `Auth` facade instead of `auth()` helper function
+- **NEVER** use `auth()->check()` or `auth()->id()` in models, controllers, or other classes
+- Use `Auth::check()` and `Auth::id()` for better type safety and consistency
+- Validate all inputs, use CSRF protection, sanitize output (XSS prevention)
+- **Customer Data**: Implement privacy controls, encrypt sensitive information
+- **Multi-Tenant**: Prevent cross-tenant access, ensure proper isolation
+- **Compliance**: GDPR compliance, data retention policies, audit trails
+- Never commit sensitive data, use environment variables
+
+## Performance & High-Volume Database Rules
+
+### Scalability & Architecture
+- Implement horizontal scaling, read replicas, connection pooling
+- Use database-specific optimizations (MySQL InnoDB, PostgreSQL)
+- Automated data archiving, separate archive databases
+- Data compression, retention policies
+
+### Query Optimization (Billions of Rows)
+- Use EXPLAIN/ANALYZE for execution plans
+- Implement query caching (Redis with TTL)
+- Use materialized views for complex aggregations
+- Background job processing for heavy operations
+- **NEVER**: Real-time aggregations on large datasets, OR conditions (use UNION)
+
+### Index Strategy
+- Composite indexes in selectivity order (most selective first)
+- Monitor usage, remove unused indexes
+- Partial indexes for filtered queries, covering indexes for read-heavy
+- **NEVER**: Too many indexes on write-heavy tables
+
+### Critical Performance Rules
+- **ALWAYS**: Composite indexes (branch_id + created_at), database partitioning
+- **ALWAYS**: Cursor-based pagination, connection pooling, specify columns (no SELECT *)
+- **ALWAYS**: Database-level aggregations, query caching, bulk operations
+- **NEVER**: Full table scans, application-level calculations
+- **ERP-Specific**: Customer search indexing (name, phone, email), tenant switching optimization
+
+## Documentation, Organization & Maintenance
+
+### Documentation Standards
+- Document public methods/classes, maintain README files
+- Document API endpoints, setup/deployment instructions
+- **ERP-Specific**: Customer workflows, tenant setup, data export formats
+- Use descriptive commit messages, document breaking changes
+
+### File Organization
+- Follow Laravel conventions, group files logically
+- Consistent naming, organize by feature/purpose
+- **Business Components**: Dedicated directories for business files
+- **Multi-Tenant**: Clear separation between master and tenant code
+- **Assets**: Organize CSS/JS by feature, optimize images, multi-language assets
+
+### Error Handling & Deployment
+- Use Laravel's exception handling, log appropriately
+- **ERP-Specific**: Clear business validation errors, handle tenant connection issues
+- **Pre-deployment**: Run tests, Pint compliance, staging verification
+- **Production**: Proper config, monitoring, backup strategies
+
+### Code Review & Maintenance
+- Review all changes, verify test coverage, update documentation
+- Keep dependencies updated, refactor legacy code
+- **Rule Management**: Update rules as project evolves, document changes
+
+## Experience & ERP-Specific Considerations
+
+### Key Lessons Learned
+- **Language Detection**: `app()->getLocale()` returns app default, not user session language
+  - **Solution**: Multi-source detection (session/headers/cookies), locale switching helpers
+- **Excel Memory Management**: Large datasets cause exhaustion, use chunked processing (2GB limit, 600s timeout)
+- **UTF-8 for Arabic**: Include BOM (`\xEF\xBB\xBF`) for proper Arabic text in Excel
+- **Performance vs Styling**: Balance professional appearance with technical constraints
+
+### Multi-Tenant Architecture
+- **Structure**: Master DB (Facility, User, config) + Tenant DBs (Customer, Branch, Employee, Opportunity, Task)
+- **Critical**: Use `TenantDatabaseService::connectToFacility($facility)` before tenant queries
+- **Verification**: Always verify connection before executing queries
+- **Tenant Models**: Customer, Branch, Employee, Opportunity, Task, Ticket, Project, etc.
+
+### Customer & Business Data Management
+- **Search Optimization**: Efficient indexing for name, phone, email searches
+- **Multi-Language**: Support English, Arabic, Kurdish interfaces
+- **Data Processing**: Queue-based processing, batch inserts, data caching
+- **Compliance**: Privacy controls, data retention, GDPR compliance
+
+### Reporting & Analytics
+- **Excel Export**: Professional styling, color-coding, optimal column widths, chunked processing
+- **Multi-Format**: Support Excel, PDF, CSV with consistent language adaptation
+- **High-Performance**: Pre-computed aggregations, dedicated reporting databases, columnar storage
+
+## Command Execution Standards
+
+### Artisan Commands
+- **ALWAYS** use `--no-interaction` argument when executing commands in automation scripts
+- This prevents commands from hanging and ensures they work without user input
+
+**Examples:**
+```bash
+# ✅ CORRECT
+php artisan make:filament-resource Announcement --no-interaction
+
+# ❌ INCORRECT
+php artisan make:filament-resource Announcement
+```
+
+## Filament Resource Design Standards
+
+### Simple vs Complex Resources
+- **Use simple Filament resources** when forms have few inputs (≤ 5-7 fields)
+- **Use full resources with pages** for complex forms with many fields (> 7 fields)
+- Simple resources reduce complexity and improve performance for basic CRUD operations
+
+**Examples:**
+```bash
+# ✅ Simple resource for basic models with few fields
+php artisan make:filament-resource Gender --simple --no-interaction
+
+# ✅ Full resource for complex models with many fields
+php artisan make:filament-resource Customer --no-interaction
+```
+
+### Filament Form Structure Rules
+1. **NO GRIDS** - Use Groups and Sections for layout
+2. **3-Column Schema** - Always set `->columns(3)` on the main schema
+3. **2:1 Ratio** - Left group (colspan 2), Right group (colspan 1)
+4. **Sections First** - Always wrap inputs in sections, not directly in groups
+5. **Column Spans** - Use `->columnSpanFull()` for full-width fields within sections
+6. **Internal Columns** - Set `->columns(2)` or appropriate value on sections for internal layout
+7. **Checkbox Lists** - Use `->columns(1)` in narrow right column for proper display
+
+## Enum Implementation Standards
+
+### Required Enum Structure
+- **ALWAYS** create enum classes when models use enum fields
+- **ALWAYS** implement Filament contracts: `HasLabel`, `HasColor`, `HasIcon`, `HasDescription`
+- Follow the established project structure and naming conventions
+
+**Complete Enum Template:**
+```php
+<?php
+
+namespace App\Enums;
+
+use Filament\Support\Contracts\HasColor;
+use Filament\Support\Contracts\HasDescription;
+use Filament\Support\Contracts\HasIcon;
+use Filament\Support\Contracts\HasLabel;
+use Filament\Support\Icons\Heroicon;
+
+enum ExampleStatus: string implements HasColor, HasDescription, HasIcon, HasLabel
+{
+    case DRAFT = 'draft';
+    case PUBLISHED = 'published';
+    case ARCHIVED = 'archived';
+
+    public function getLabel(): ?string
+    {
+        return match ($this) {
+            self::DRAFT => __('Draft'),
+            self::PUBLISHED => __('Published'),
+            self::ARCHIVED => __('Archived'),
+        };
+    }
+
+    public function getColor(): string|array|null
+    {
+        return match ($this) {
+            self::DRAFT => 'gray',
+            self::PUBLISHED => 'success',
+            self::ARCHIVED => 'secondary',
+        };
+    }
+
+    public function getIcon(): string|\BackedEnum|null
+    {
+        return match ($this) {
+            self::DRAFT => Heroicon::DocumentText,
+            self::PUBLISHED => Heroicon::CheckCircle,
+            self::ARCHIVED => Heroicon::ArchiveBox,
+        };
+    }
+
+    public function getDescription(): ?string
+    {
+        return match ($this) {
+            self::DRAFT => __('Item is in draft mode'),
+            self::PUBLISHED => __('Item is published and visible'),
+            self::ARCHIVED => __('Item has been archived'),
+        };
+    }
+
+    public static function options(): array
+    {
+        return collect(self::cases())->mapWithKeys(fn ($case) => [
+            $case->value => $case->getLabel(),
+        ])->toArray();
+    }
+}
+```
+
+### Enum Guidelines
+1. **Use descriptive case names** in UPPER_CASE format
+2. **Provide translations** for all labels and descriptions using `__()`
+3. **Use appropriate colors** that match Filament's color system
+4. **Choose meaningful icons** from the Heroicon set
+5. **Include helper methods** like `options()` for form selects
+6. **Maintain consistency** with existing enums in the project
+
+---
+
+**Note**: Follow these rules consistently for code quality, security, and performance. Update rules as project evolves.

@@ -1,0 +1,1229 @@
+---
+description: when exporting to excel across the project
+alwaysApply: false
+---
+# Ali Fusion ERP Excel Export Documentation
+
+## Excel Export Overview
+
+Ali Fusion ERP provides comprehensive Excel export functionality with professional styling, multi-language support, and optimized performance for large datasets.
+
+## Export Controller
+
+The main export functionality is handled by `ReportsController`:
+
+```php
+// app/Http/Controllers/ReportsController.php
+class ReportsController extends Controller
+{
+    public function export(string $subdomain, string $type, string $format, Request $request)
+    {
+        // Memory and execution time limits for large exports
+        ini_set('memory_limit', '2048M');
+        ini_set('max_execution_time', 600);
+        
+        Log::info('Report Export Started', [
+            'type' => $type,
+            'format' => $format,
+            'user_id' => Auth::id(),
+            'timestamp' => now(),
+        ]);
+        
+        $data = $this->getReportData($type, $request);
+        
+        if (empty($data['records'])) {
+            return redirect()->back()->with('error', __('No data found for the selected criteria.'));
+        }
+        
+        switch ($format) {
+            case 'excel':
+                return $this->exportExcel($type, $data);
+            default:
+                return redirect()->back()->with('error', __('Invalid export format.'));
+        }
+    }
+}
+```
+
+## Excel Export Features
+
+### Memory Management
+```php
+// Set memory and execution limits for large exports
+ini_set('memory_limit', '2048M');
+ini_set('max_execution_time', 600);
+```
+
+### Professional Styling
+```php
+// Excel export with styling
+$exportClass = new class($data, $type) implements 
+    FromCollection, WithColumnWidths, WithEvents, WithHeadings, WithMapping, WithStyles
+{
+    public function styles(Worksheet $sheet)
+    {
+        return [
+            // Header row styling
+            1 => [
+                'font' => ['bold' => true, 'size' => 12],
+                'fill' => ['fillType' => Fill::FILL_SOLID, 'color' => ['rgb' => 'E5E7EB']],
+                'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER],
+            ],
+            // Data row styling
+            'A:Z' => [
+                'borders' => [
+                    'allBorders' => ['borderStyle' => Border::BORDER_THIN],
+                ],
+            ],
+        ];
+    }
+    
+    public function columnWidths(): array
+    {
+        return [
+            'A' => 15,  // ID
+            'B' => 25,  // Name
+            'C' => 30,  // Email
+            'D' => 20,  // Status
+            'E' => 20,  // Created At
+        ];
+    }
+};
+```
+
+### Multi-Language Support
+```php
+// Locale switching for exports
+private function translateText($key, $locale = 'en') 
+{
+    $original = app()->getLocale();
+    app()->setLocale($locale);
+    $translation = __($key);
+    app()->setLocale($original);
+    return $translation;
+}
+```
+
+### UTF-8 Support for Arabic
+```php
+// Include BOM for proper Arabic text display
+$bom = "\xEF\xBB\xBF";
+$content = $bom . $content;
+```
+
+## Excel Export Implementation
+
+### Single Report Export
+```php
+private function exportExcel(string $type, array $data): BinaryFileResponse
+{
+    $filename = "{$type}-report-" . now()->format('Y-m-d') . '.xlsx';
+    
+    $exportClass = new class($data, $type) implements 
+        FromCollection, WithColumnWidths, WithEvents, WithHeadings, WithMapping, WithStyles
+    {
+        private $data;
+        private $type;
+        
+        public function __construct($data, $type)
+        {
+            $this->data = $data;
+            $this->type = $type;
+        }
+        
+        public function collection()
+        {
+            return collect($this->data['records']);
+        }
+        
+        public function headings(): array
+        {
+            return [
+                __('ID'),
+                __('Name'),
+                __('Email'),
+                __('Status'),
+                __('Created At'),
+            ];
+        }
+        
+        public function map($record): array
+        {
+            return [
+                $record->id,
+                $record->name,
+                $record->email,
+                $record->status,
+                $record->created_at->format('Y-m-d H:i:s'),
+            ];
+        }
+        
+        public function columnWidths(): array
+        {
+            return [
+                'A' => 15,
+                'B' => 25,
+                'C' => 30,
+                'D' => 20,
+                'E' => 20,
+            ];
+        }
+        
+        public function styles(Worksheet $sheet)
+        {
+            return [
+                1 => [
+                    'font' => ['bold' => true, 'size' => 12],
+                    'fill' => ['fillType' => Fill::FILL_SOLID, 'color' => ['rgb' => 'E5E7EB']],
+                    'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER],
+                ],
+                'A:Z' => [
+                    'borders' => [
+                        'allBorders' => ['borderStyle' => Border::BORDER_THIN],
+                    ],
+                ],
+            ];
+        }
+        
+        public function registerEvents(): array
+        {
+            return [
+                AfterSheet::class => function(AfterSheet $event) {
+                    $event->sheet->getDelegate()->getStyle('A1:E1')
+                        ->getFont()
+                        ->setBold(true);
+                },
+            ];
+        }
+    };
+    
+    return Excel::download($exportClass, $filename);
+}
+```
+
+### All Reports Export
+```php
+private function exportAllExcel(array $allData): BinaryFileResponse
+{
+    $filename = "all-reports-" . now()->format('Y-m-d') . '.xlsx';
+    
+    $export = new AllReportsExport($allData, app()->getLocale());
+    
+    return Excel::download($export, $filename);
+}
+```
+
+### Multi-Sheet Structure
+```php
+// app/Exports/AllReportsExport.php
+class AllReportsExport implements WithMultipleSheets
+{
+    protected array $allData;
+    protected string $locale;
+    
+    public function __construct(array $allData, string $locale = 'en')
+    {
+        $this->allData = $allData;
+        $this->locale = $locale;
+    }
+    
+    public function sheets(): array
+    {
+        $sheets = [];
+        
+        // Create a sheet for each report type
+        foreach ($this->allData as $type => $reportData) {
+            $sheets[] = new ReportSheet($type, $reportData, $this->locale);
+        }
+        
+        // Add summary sheet
+        $sheets[] = new SummarySheet($this->allData, $this->locale);
+        
+        return $sheets;
+    }
+}
+```
+
+### Individual Report Sheet
+```php
+// app/Exports/ReportSheet.php
+class ReportSheet implements FromCollection, WithHeadings, WithMapping, WithStyles, WithColumnWidths
+{
+    protected string $type;
+    protected array $data;
+    protected string $locale;
+    
+    public function __construct(string $type, array $data, string $locale)
+    {
+        $this->type = $type;
+        $this->data = $data;
+        $this->locale = $locale;
+    }
+    
+    public function collection()
+    {
+        return collect($this->data['records']);
+    }
+    
+    public function headings(): array
+    {
+        // Translate headings based on locale
+        app()->setLocale($this->locale);
+        
+        return [
+            __('ID'),
+            __('Name'),
+            __('Email'),
+            __('Status'),
+            __('Created At'),
+        ];
+    }
+    
+    public function map($record): array
+    {
+        return [
+            $record->id,
+            $record->name,
+            $record->email,
+            $record->status,
+            $record->created_at->format('Y-m-d H:i:s'),
+        ];
+    }
+    
+    public function columnWidths(): array
+    {
+        return [
+            'A' => 15,
+            'B' => 25,
+            'C' => 30,
+            'D' => 20,
+            'E' => 20,
+        ];
+    }
+    
+    public function styles(Worksheet $sheet)
+    {
+        return [
+            1 => [
+                'font' => ['bold' => true, 'size' => 12],
+                'fill' => ['fillType' => Fill::FILL_SOLID, 'color' => ['rgb' => 'E5E7EB']],
+                'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER],
+            ],
+            'A:Z' => [
+                'borders' => [
+                    'allBorders' => ['borderStyle' => Border::BORDER_THIN],
+                ],
+            ],
+        ];
+    }
+}
+```
+
+## Excel Export Standards
+
+### Required Imports
+```php
+use Maatwebsite\Excel\Concerns\FromCollection;
+use Maatwebsite\Excel\Concerns\WithColumnWidths;
+use Maatwebsite\Excel\Concerns\WithEvents;
+use Maatwebsite\Excel\Concerns\WithHeadings;
+use Maatwebsite\Excel\Concerns\WithMapping;
+use Maatwebsite\Excel\Concerns\WithStyles;
+use Maatwebsite\Excel\Events\AfterSheet;
+use Maatwebsite\Excel\Facades\Excel;
+use PhpOffice\PhpSpreadsheet\Style\Alignment;
+use PhpOffice\PhpSpreadsheet\Style\Border;
+use PhpOffice\PhpSpreadsheet\Style\Fill;
+use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
+```
+
+### Styling Guidelines
+
+#### Header Styling
+```php
+1 => [
+    'font' => ['bold' => true, 'size' => 12],
+    'fill' => ['fillType' => Fill::FILL_SOLID, 'color' => ['rgb' => 'E5E7EB']],
+    'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER],
+],
+```
+
+#### Border Styling
+```php
+'A:Z' => [
+    'borders' => [
+        'allBorders' => ['borderStyle' => Border::BORDER_THIN],
+    ],
+],
+```
+
+#### Column Widths
+```php
+public function columnWidths(): array
+{
+    return [
+        'A' => 15,  // ID
+        'B' => 25,  // Name
+        'C' => 30,  // Email
+        'D' => 20,  // Status
+        'E' => 20,  // Created At
+    ];
+}
+```
+
+### Color Coding
+```php
+// Status-based color coding
+public function map($record): array
+{
+    return [
+        $record->id,
+        $record->name,
+        $record->email,
+        $record->status,
+        $record->created_at->format('Y-m-d H:i:s'),
+    ];
+}
+
+public function registerEvents(): array
+{
+    return [
+        AfterSheet::class => function(AfterSheet $event) {
+            $sheet = $event->sheet->getDelegate();
+            
+            // Color code status column
+            foreach ($sheet->getRowIterator() as $row) {
+                $statusCell = $sheet->getCell('D' . $row->getRowIndex());
+                $status = $statusCell->getValue();
+                
+                switch ($status) {
+                    case 'active':
+                        $statusCell->getStyle()->getFill()
+                            ->setFillType(Fill::FILL_SOLID)
+                            ->getStartColor()->setRGB('10B981');
+                        break;
+                    case 'inactive':
+                        $statusCell->getStyle()->getFill()
+                            ->setFillType(Fill::FILL_SOLID)
+                            ->getStartColor()->setRGB('EF4444');
+                        break;
+                }
+            }
+        },
+    ];
+}
+```
+
+## Performance Optimization
+
+### Large Dataset Handling
+```php
+// Use chunking for very large datasets
+public function collection()
+{
+    return Model::chunk(1000, function ($records) {
+        foreach ($records as $record) {
+            yield $record;
+        }
+    });
+}
+```
+
+### Memory Management
+```php
+// Set appropriate memory limits
+ini_set('memory_limit', '2048M');
+ini_set('max_execution_time', 600);
+
+// Use streaming for very large exports
+return Excel::download($export, $filename, \Maatwebsite\Excel\Excel::XLSX, [
+    'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+]);
+```
+
+### Caching
+```php
+// Cache expensive data preparation
+public function getExportData(): array
+{
+    $cacheKey = "export-data-{$this->type}-" . md5(serialize($this->filters));
+    
+    return Cache::remember($cacheKey, 300, function () {
+        return $this->prepareExportData();
+    });
+}
+```
+
+## Multi-Language Support
+
+### Language Detection
+```php
+// Detect user language from multiple sources
+private function getUserLanguage(): string
+{
+    return session('locale') 
+        ?? request()->header('Accept-Language')
+        ?? request()->cookie('locale')
+        ?? app()->getLocale();
+}
+```
+
+### Translation in Exports
+```php
+// Translate text for exports
+private function translateForExport(string $key, string $locale = null): string
+{
+    $locale = $locale ?? $this->getUserLanguage();
+    $original = app()->getLocale();
+    
+    app()->setLocale($locale);
+    $translation = __($key);
+    app()->setLocale($original);
+    
+    return $translation;
+}
+```
+
+### RTL Support
+```php
+// RTL layout detection
+private function isRtlLanguage(string $locale): bool
+{
+    return in_array($locale, ['ar', 'ku']);
+}
+
+// Apply RTL styles
+if ($this->isRtlLanguage($locale)) {
+    $sheet->getStyle('A:Z')->getAlignment()->setHorizontal(Alignment::HORIZONTAL_RIGHT);
+}
+```
+
+## Best Practices
+
+### 1. Error Handling
+```php
+try {
+    $export = new CustomExport($data);
+    return Excel::download($export, $filename);
+} catch (\Exception $e) {
+    Log::error('Excel Export Failed', [
+        'error' => $e->getMessage(),
+        'trace' => $e->getTraceAsString(),
+    ]);
+    
+    return redirect()->back()->with('error', __('Export failed. Please try again.'));
+}
+```
+
+### 2. Data Validation
+```php
+// Validate data before export
+if (empty($data['records'])) {
+    return redirect()->back()->with('error', __('No data found for export.'));
+}
+
+// Check data size
+if (count($data['records']) > 100000) {
+    return redirect()->back()->with('warning', __('Dataset too large. Please apply filters.'));
+}
+```
+
+### 3. File Naming
+```php
+// Generate descriptive filenames
+$filename = "{$type}-report-" . now()->format('Y-m-d-H-i-s') . '.xlsx';
+
+// Include user context
+$filename = "{$type}-report-{$user->name}-" . now()->format('Y-m-d') . '.xlsx';
+```
+
+### 4. Progress Tracking
+```php
+// For very large exports, consider progress tracking
+public function registerEvents(): array
+{
+    return [
+        BeforeExport::class => function(BeforeExport $event) {
+            $this->startTime = microtime(true);
+        },
+        AfterSheet::class => function(AfterSheet $event) {
+            $this->processedRows++;
+            if ($this->processedRows % 1000 === 0) {
+                Log::info("Processed {$this->processedRows} rows");
+            }
+        },
+    ];
+}
+```
+
+## Troubleshooting
+
+### Common Issues
+
+1. **Memory Exhaustion**
+   ```php
+   // Solution: Increase memory limit and use chunking
+   ini_set('memory_limit', '2048M');
+   Model::chunk(1000, function ($records) {
+       // Process in chunks
+   });
+   ```
+
+2. **Arabic Text Display**
+   ```php
+   // Solution: Include UTF-8 BOM
+   $bom = "\xEF\xBB\xBF";
+   $content = $bom . $content;
+   ```
+
+3. **Export Timeout**
+   ```php
+   // Solution: Increase execution time
+   ini_set('max_execution_time', 600);
+   ```
+
+4. **Styling Not Applied**
+   ```php
+   // Solution: Ensure proper event registration
+   public function registerEvents(): array
+   {
+       return [
+           AfterSheet::class => function(AfterSheet $event) {
+               // Apply styles
+           },
+       ];
+   }
+   ```
+
+### Performance Monitoring
+
+```php
+// Monitor memory usage
+$memoryUsage = memory_get_usage(true);
+$peakMemory = memory_get_peak_usage(true);
+
+// Monitor execution time
+$startTime = microtime(true);
+// ... export operations
+$executionTime = microtime(true) - $startTime;
+
+// Log performance metrics
+Log::info('Export Performance', [
+    'memory_usage' => $memoryUsage,
+    'peak_memory' => $peakMemory,
+    'execution_time' => $executionTime,
+    'record_count' => count($records),
+]);
+```# Ali Fusion ERP Excel Export Documentation
+
+## Excel Export Overview
+
+Ali Fusion ERP provides comprehensive Excel export functionality with professional styling, multi-language support, and optimized performance for large datasets.
+
+## Export Controller
+
+The main export functionality is handled by `ReportsController`:
+
+```php
+// app/Http/Controllers/ReportsController.php
+class ReportsController extends Controller
+{
+    public function export(string $subdomain, string $type, string $format, Request $request)
+    {
+        // Memory and execution time limits for large exports
+        ini_set('memory_limit', '2048M');
+        ini_set('max_execution_time', 600);
+        
+        Log::info('Report Export Started', [
+            'type' => $type,
+            'format' => $format,
+            'user_id' => Auth::id(),
+            'timestamp' => now(),
+        ]);
+        
+        $data = $this->getReportData($type, $request);
+        
+        if (empty($data['records'])) {
+            return redirect()->back()->with('error', __('No data found for the selected criteria.'));
+        }
+        
+        switch ($format) {
+            case 'excel':
+                return $this->exportExcel($type, $data);
+            default:
+                return redirect()->back()->with('error', __('Invalid export format.'));
+        }
+    }
+}
+```
+
+## Excel Export Features
+
+### Memory Management
+```php
+// Set memory and execution limits for large exports
+ini_set('memory_limit', '2048M');
+ini_set('max_execution_time', 600);
+```
+
+### Professional Styling
+```php
+// Excel export with styling
+$exportClass = new class($data, $type) implements 
+    FromCollection, WithColumnWidths, WithEvents, WithHeadings, WithMapping, WithStyles
+{
+    public function styles(Worksheet $sheet)
+    {
+        return [
+            // Header row styling
+            1 => [
+                'font' => ['bold' => true, 'size' => 12],
+                'fill' => ['fillType' => Fill::FILL_SOLID, 'color' => ['rgb' => 'E5E7EB']],
+                'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER],
+            ],
+            // Data row styling
+            'A:Z' => [
+                'borders' => [
+                    'allBorders' => ['borderStyle' => Border::BORDER_THIN],
+                ],
+            ],
+        ];
+    }
+    
+    public function columnWidths(): array
+    {
+        return [
+            'A' => 15,  // ID
+            'B' => 25,  // Name
+            'C' => 30,  // Email
+            'D' => 20,  // Status
+            'E' => 20,  // Created At
+        ];
+    }
+};
+```
+
+### Multi-Language Support
+```php
+// Locale switching for exports
+private function translateText($key, $locale = 'en') 
+{
+    $original = app()->getLocale();
+    app()->setLocale($locale);
+    $translation = __($key);
+    app()->setLocale($original);
+    return $translation;
+}
+```
+
+### UTF-8 Support for Arabic
+```php
+// Include BOM for proper Arabic text display
+$bom = "\xEF\xBB\xBF";
+$content = $bom . $content;
+```
+
+## Excel Export Implementation
+
+### Single Report Export
+```php
+private function exportExcel(string $type, array $data): BinaryFileResponse
+{
+    $filename = "{$type}-report-" . now()->format('Y-m-d') . '.xlsx';
+    
+    $exportClass = new class($data, $type) implements 
+        FromCollection, WithColumnWidths, WithEvents, WithHeadings, WithMapping, WithStyles
+    {
+        private $data;
+        private $type;
+        
+        public function __construct($data, $type)
+        {
+            $this->data = $data;
+            $this->type = $type;
+        }
+        
+        public function collection()
+        {
+            return collect($this->data['records']);
+        }
+        
+        public function headings(): array
+        {
+            return [
+                __('ID'),
+                __('Name'),
+                __('Email'),
+                __('Status'),
+                __('Created At'),
+            ];
+        }
+        
+        public function map($record): array
+        {
+            return [
+                $record->id,
+                $record->name,
+                $record->email,
+                $record->status,
+                $record->created_at->format('Y-m-d H:i:s'),
+            ];
+        }
+        
+        public function columnWidths(): array
+        {
+            return [
+                'A' => 15,
+                'B' => 25,
+                'C' => 30,
+                'D' => 20,
+                'E' => 20,
+            ];
+        }
+        
+        public function styles(Worksheet $sheet)
+        {
+            return [
+                1 => [
+                    'font' => ['bold' => true, 'size' => 12],
+                    'fill' => ['fillType' => Fill::FILL_SOLID, 'color' => ['rgb' => 'E5E7EB']],
+                    'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER],
+                ],
+                'A:Z' => [
+                    'borders' => [
+                        'allBorders' => ['borderStyle' => Border::BORDER_THIN],
+                    ],
+                ],
+            ];
+        }
+        
+        public function registerEvents(): array
+        {
+            return [
+                AfterSheet::class => function(AfterSheet $event) {
+                    $event->sheet->getDelegate()->getStyle('A1:E1')
+                        ->getFont()
+                        ->setBold(true);
+                },
+            ];
+        }
+    };
+    
+    return Excel::download($exportClass, $filename);
+}
+```
+
+### All Reports Export
+```php
+private function exportAllExcel(array $allData): BinaryFileResponse
+{
+    $filename = "all-reports-" . now()->format('Y-m-d') . '.xlsx';
+    
+    $export = new AllReportsExport($allData, app()->getLocale());
+    
+    return Excel::download($export, $filename);
+}
+```
+
+### Multi-Sheet Structure
+```php
+// app/Exports/AllReportsExport.php
+class AllReportsExport implements WithMultipleSheets
+{
+    protected array $allData;
+    protected string $locale;
+    
+    public function __construct(array $allData, string $locale = 'en')
+    {
+        $this->allData = $allData;
+        $this->locale = $locale;
+    }
+    
+    public function sheets(): array
+    {
+        $sheets = [];
+        
+        // Create a sheet for each report type
+        foreach ($this->allData as $type => $reportData) {
+            $sheets[] = new ReportSheet($type, $reportData, $this->locale);
+        }
+        
+        // Add summary sheet
+        $sheets[] = new SummarySheet($this->allData, $this->locale);
+        
+        return $sheets;
+    }
+}
+```
+
+### Individual Report Sheet
+```php
+// app/Exports/ReportSheet.php
+class ReportSheet implements FromCollection, WithHeadings, WithMapping, WithStyles, WithColumnWidths
+{
+    protected string $type;
+    protected array $data;
+    protected string $locale;
+    
+    public function __construct(string $type, array $data, string $locale)
+    {
+        $this->type = $type;
+        $this->data = $data;
+        $this->locale = $locale;
+    }
+    
+    public function collection()
+    {
+        return collect($this->data['records']);
+    }
+    
+    public function headings(): array
+    {
+        // Translate headings based on locale
+        app()->setLocale($this->locale);
+        
+        return [
+            __('ID'),
+            __('Name'),
+            __('Email'),
+            __('Status'),
+            __('Created At'),
+        ];
+    }
+    
+    public function map($record): array
+    {
+        return [
+            $record->id,
+            $record->name,
+            $record->email,
+            $record->status,
+            $record->created_at->format('Y-m-d H:i:s'),
+        ];
+    }
+    
+    public function columnWidths(): array
+    {
+        return [
+            'A' => 15,
+            'B' => 25,
+            'C' => 30,
+            'D' => 20,
+            'E' => 20,
+        ];
+    }
+    
+    public function styles(Worksheet $sheet)
+    {
+        return [
+            1 => [
+                'font' => ['bold' => true, 'size' => 12],
+                'fill' => ['fillType' => Fill::FILL_SOLID, 'color' => ['rgb' => 'E5E7EB']],
+                'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER],
+            ],
+            'A:Z' => [
+                'borders' => [
+                    'allBorders' => ['borderStyle' => Border::BORDER_THIN],
+                ],
+            ],
+        ];
+    }
+}
+```
+
+## Excel Export Standards
+
+### Required Imports
+```php
+use Maatwebsite\Excel\Concerns\FromCollection;
+use Maatwebsite\Excel\Concerns\WithColumnWidths;
+use Maatwebsite\Excel\Concerns\WithEvents;
+use Maatwebsite\Excel\Concerns\WithHeadings;
+use Maatwebsite\Excel\Concerns\WithMapping;
+use Maatwebsite\Excel\Concerns\WithStyles;
+use Maatwebsite\Excel\Events\AfterSheet;
+use Maatwebsite\Excel\Facades\Excel;
+use PhpOffice\PhpSpreadsheet\Style\Alignment;
+use PhpOffice\PhpSpreadsheet\Style\Border;
+use PhpOffice\PhpSpreadsheet\Style\Fill;
+use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
+```
+
+### Styling Guidelines
+
+#### Header Styling
+```php
+1 => [
+    'font' => ['bold' => true, 'size' => 12],
+    'fill' => ['fillType' => Fill::FILL_SOLID, 'color' => ['rgb' => 'E5E7EB']],
+    'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER],
+],
+```
+
+#### Border Styling
+```php
+'A:Z' => [
+    'borders' => [
+        'allBorders' => ['borderStyle' => Border::BORDER_THIN],
+    ],
+],
+```
+
+#### Column Widths
+```php
+public function columnWidths(): array
+{
+    return [
+        'A' => 15,  // ID
+        'B' => 25,  // Name
+        'C' => 30,  // Email
+        'D' => 20,  // Status
+        'E' => 20,  // Created At
+    ];
+}
+```
+
+### Color Coding
+```php
+// Status-based color coding
+public function map($record): array
+{
+    return [
+        $record->id,
+        $record->name,
+        $record->email,
+        $record->status,
+        $record->created_at->format('Y-m-d H:i:s'),
+    ];
+}
+
+public function registerEvents(): array
+{
+    return [
+        AfterSheet::class => function(AfterSheet $event) {
+            $sheet = $event->sheet->getDelegate();
+            
+            // Color code status column
+            foreach ($sheet->getRowIterator() as $row) {
+                $statusCell = $sheet->getCell('D' . $row->getRowIndex());
+                $status = $statusCell->getValue();
+                
+                switch ($status) {
+                    case 'active':
+                        $statusCell->getStyle()->getFill()
+                            ->setFillType(Fill::FILL_SOLID)
+                            ->getStartColor()->setRGB('10B981');
+                        break;
+                    case 'inactive':
+                        $statusCell->getStyle()->getFill()
+                            ->setFillType(Fill::FILL_SOLID)
+                            ->getStartColor()->setRGB('EF4444');
+                        break;
+                }
+            }
+        },
+    ];
+}
+```
+
+## Performance Optimization
+
+### Large Dataset Handling
+```php
+// Use chunking for very large datasets
+public function collection()
+{
+    return Model::chunk(1000, function ($records) {
+        foreach ($records as $record) {
+            yield $record;
+        }
+    });
+}
+```
+
+### Memory Management
+```php
+// Set appropriate memory limits
+ini_set('memory_limit', '2048M');
+ini_set('max_execution_time', 600);
+
+// Use streaming for very large exports
+return Excel::download($export, $filename, \Maatwebsite\Excel\Excel::XLSX, [
+    'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+]);
+```
+
+### Caching
+```php
+// Cache expensive data preparation
+public function getExportData(): array
+{
+    $cacheKey = "export-data-{$this->type}-" . md5(serialize($this->filters));
+    
+    return Cache::remember($cacheKey, 300, function () {
+        return $this->prepareExportData();
+    });
+}
+```
+
+## Multi-Language Support
+
+### Language Detection
+```php
+// Detect user language from multiple sources
+private function getUserLanguage(): string
+{
+    return session('locale') 
+        ?? request()->header('Accept-Language')
+        ?? request()->cookie('locale')
+        ?? app()->getLocale();
+}
+```
+
+### Translation in Exports
+```php
+// Translate text for exports
+private function translateForExport(string $key, string $locale = null): string
+{
+    $locale = $locale ?? $this->getUserLanguage();
+    $original = app()->getLocale();
+    
+    app()->setLocale($locale);
+    $translation = __($key);
+    app()->setLocale($original);
+    
+    return $translation;
+}
+```
+
+### RTL Support
+```php
+// RTL layout detection
+private function isRtlLanguage(string $locale): bool
+{
+    return in_array($locale, ['ar', 'ku']);
+}
+
+// Apply RTL styles
+if ($this->isRtlLanguage($locale)) {
+    $sheet->getStyle('A:Z')->getAlignment()->setHorizontal(Alignment::HORIZONTAL_RIGHT);
+}
+```
+
+## Best Practices
+
+### 1. Error Handling
+```php
+try {
+    $export = new CustomExport($data);
+    return Excel::download($export, $filename);
+} catch (\Exception $e) {
+    Log::error('Excel Export Failed', [
+        'error' => $e->getMessage(),
+        'trace' => $e->getTraceAsString(),
+    ]);
+    
+    return redirect()->back()->with('error', __('Export failed. Please try again.'));
+}
+```
+
+### 2. Data Validation
+```php
+// Validate data before export
+if (empty($data['records'])) {
+    return redirect()->back()->with('error', __('No data found for export.'));
+}
+
+// Check data size
+if (count($data['records']) > 100000) {
+    return redirect()->back()->with('warning', __('Dataset too large. Please apply filters.'));
+}
+```
+
+### 3. File Naming
+```php
+// Generate descriptive filenames
+$filename = "{$type}-report-" . now()->format('Y-m-d-H-i-s') . '.xlsx';
+
+// Include user context
+$filename = "{$type}-report-{$user->name}-" . now()->format('Y-m-d') . '.xlsx';
+```
+
+### 4. Progress Tracking
+```php
+// For very large exports, consider progress tracking
+public function registerEvents(): array
+{
+    return [
+        BeforeExport::class => function(BeforeExport $event) {
+            $this->startTime = microtime(true);
+        },
+        AfterSheet::class => function(AfterSheet $event) {
+            $this->processedRows++;
+            if ($this->processedRows % 1000 === 0) {
+                Log::info("Processed {$this->processedRows} rows");
+            }
+        },
+    ];
+}
+```
+
+## Troubleshooting
+
+### Common Issues
+
+1. **Memory Exhaustion**
+   ```php
+   // Solution: Increase memory limit and use chunking
+   ini_set('memory_limit', '2048M');
+   Model::chunk(1000, function ($records) {
+       // Process in chunks
+   });
+   ```
+
+2. **Arabic Text Display**
+   ```php
+   // Solution: Include UTF-8 BOM
+   $bom = "\xEF\xBB\xBF";
+   $content = $bom . $content;
+   ```
+
+3. **Export Timeout**
+   ```php
+   // Solution: Increase execution time
+   ini_set('max_execution_time', 600);
+   ```
+
+4. **Styling Not Applied**
+   ```php
+   // Solution: Ensure proper event registration
+   public function registerEvents(): array
+   {
+       return [
+           AfterSheet::class => function(AfterSheet $event) {
+               // Apply styles
+           },
+       ];
+   }
+   ```
+
+### Performance Monitoring
+
+```php
+// Monitor memory usage
+$memoryUsage = memory_get_usage(true);
+$peakMemory = memory_get_peak_usage(true);
+
+// Monitor execution time
+$startTime = microtime(true);
+// ... export operations
+$executionTime = microtime(true) - $startTime;
+
+// Log performance metrics
+Log::info('Export Performance', [
+    'memory_usage' => $memoryUsage,
+    'peak_memory' => $peakMemory,
+    'execution_time' => $executionTime,
+    'record_count' => count($records),
+]);
+```

@@ -1,0 +1,297 @@
+---
+description: when editing dashboard and widgets
+alwaysApply: false
+---
+# Ali Fusion ERP Dashboard Documentation
+
+## Dashboard Overview
+
+The Ali Fusion ERP dashboard is built using Filament v4 and consists of multiple widgets organized in a responsive grid layout.
+
+### Dashboard Structure
+
+```php
+// app/Filament/Pages/Dashboard.php
+class Dashboard extends BaseDashboard
+{
+    public function getWidgets(): array
+    {
+        return [
+            // ERP Operations Widgets (Top Section)
+            AlertsWidget::class,
+            SalesPipelineWidget::class,
+            CustomerHealthWidget::class,
+            TodaysTasksWidget::class,
+
+            // Analysis Widgets (Bottom Section)
+            QuickStatsWidget::class,
+            ReportsWidget::class,
+        ];
+    }
+
+    public function getColumns(): int|array
+    {
+        return [
+            'default' => 1,
+            'sm' => 1,
+            'md' => 2,
+            'lg' => 3,
+            'xl' => 3,
+            '2xl' => 3,
+        ];
+    }
+}
+```
+
+### Dashboard Features
+
+- **Responsive Design**: Adapts to different screen sizes
+- **Real-time Data**: Widgets show live data from the database
+- **Interactive Elements**: Clickable widgets that navigate to detailed views
+- **Multi-language Support**: All text is translatable
+- **Permission-based Display**: Widgets respect user permissions
+
+### Widget Layout
+
+The dashboard uses a responsive grid system:
+
+- **Mobile (default)**: 1 column
+- **Small screens (sm)**: 1 column
+- **Medium screens (md)**: 2 columns
+- **Large screens (lg+)**: 3 columns
+
+### Widget Categories
+
+#### 1. ERP Operations Widgets (Top Section)
+- **AlertsWidget**: Critical notifications requiring immediate attention
+- **SalesPipelineWidget**: Sales pipeline visualization with stages and values
+- **CustomerHealthWidget**: Customer health metrics and engagement levels
+- **TodaysTasksWidget**: Today's tasks and priorities
+
+#### 2. Analysis Widgets (Bottom Section)
+- **QuickStatsWidget**: Key performance indicators at a glance
+- **ReportsWidget**: Quick access to all available reports
+
+### Customization
+
+#### Adding New Widgets
+
+1. Create widget class in `app/Filament/Widgets/`
+2. Extend appropriate base class (`Widget` or `StatsOverviewWidget`)
+3. Add to dashboard's `getWidgets()` method
+4. Implement required methods
+
+#### Widget Configuration
+
+```php
+class CustomWidget extends Widget
+{
+    protected string $view = 'filament.widgets.custom-widget';
+    protected int|string|array $columnSpan = 'full'; // or specific span
+    protected static bool $isLazy = false; // for performance
+}
+```
+
+#### Responsive Behavior
+
+```php
+// Widget can specify its own column span
+protected int|string|array $columnSpan = [
+    'default' => 'full',
+    'md' => 2,
+    'lg' => 1,
+];
+```
+
+### Performance Considerations
+
+- Use `$isLazy = true` for expensive widgets
+- Cache frequently accessed data
+- Optimize database queries
+- Implement proper loading states
+
+### Best Practices
+
+1. **Keep widgets focused** on single responsibility
+2. **Use consistent naming** conventions
+3. **Provide loading states** for better UX
+4. **Handle empty states** gracefully
+5. **Make widgets interactive** where appropriate
+6. **Follow Filament v4 patterns** for consistency
+
+### Troubleshooting
+
+#### Common Issues
+
+1. **Widget not displaying**: Check if widget is added to `getWidgets()` array
+2. **Layout issues**: Verify column span configuration
+3. **Performance problems**: Enable lazy loading for expensive widgets
+4. **Data not updating**: Ensure proper Livewire reactivity
+
+#### Debugging Tips
+
+```php
+// Enable query logging for debugging
+DB::enableQueryLog();
+// ... widget operations
+$queries = DB::getQueryLog();
+
+// Monitor memory usage
+$memoryUsage = memory_get_usage(true);
+$peakMemory = memory_get_peak_usage(true);
+```
+
+### Future Enhancements
+
+- Real-time updates via WebSocket
+- Customizable widget positions
+- Widget-specific settings
+- Mobile-optimized layouts
+- Advanced filtering options
+
+# Ali Fusion ERP Dashboard Documentation
+
+## Dashboard Overview
+
+The Ali Fusion ERP dashboard is built using Filament v4 and consists of multiple widgets organized in a responsive grid layout.
+
+### Dashboard Structure
+
+```php
+// app/Filament/Pages/Dashboard.php
+class Dashboard extends BaseDashboard
+{
+    public function getWidgets(): array
+    {
+        return [
+            // ERP Operations Widgets (Top Section)
+            AlertsWidget::class,
+            SalesPipelineWidget::class,
+            CustomerHealthWidget::class,
+            TodaysTasksWidget::class,
+
+            // Analysis Widgets (Bottom Section)
+            QuickStatsWidget::class,
+            ReportsWidget::class,
+        ];
+    }
+
+    public function getColumns(): int|array
+    {
+        return [
+            'default' => 1,
+            'sm' => 1,
+            'md' => 2,
+            'lg' => 3,
+            'xl' => 3,
+            '2xl' => 3,
+        ];
+    }
+}
+```
+
+### Dashboard Features
+
+- **Responsive Design**: Adapts to different screen sizes
+- **Real-time Data**: Widgets show live data from the database
+- **Interactive Elements**: Clickable widgets that navigate to detailed views
+- **Multi-language Support**: All text is translatable
+- **Permission-based Display**: Widgets respect user permissions
+
+### Widget Layout
+
+The dashboard uses a responsive grid system:
+
+- **Mobile (default)**: 1 column
+- **Small screens (sm)**: 1 column
+- **Medium screens (md)**: 2 columns
+- **Large screens (lg+)**: 3 columns
+
+### Widget Categories
+
+#### 1. ERP Operations Widgets (Top Section)
+- **AlertsWidget**: Critical notifications requiring immediate attention
+- **SalesPipelineWidget**: Sales pipeline visualization with stages and values
+- **CustomerHealthWidget**: Customer health metrics and engagement levels
+- **TodaysTasksWidget**: Today's tasks and priorities
+
+#### 2. Analysis Widgets (Bottom Section)
+- **QuickStatsWidget**: Key performance indicators at a glance
+- **ReportsWidget**: Quick access to all available reports
+
+### Customization
+
+#### Adding New Widgets
+
+1. Create widget class in `app/Filament/Widgets/`
+2. Extend appropriate base class (`Widget` or `StatsOverviewWidget`)
+3. Add to dashboard's `getWidgets()` method
+4. Implement required methods
+
+#### Widget Configuration
+
+```php
+class CustomWidget extends Widget
+{
+    protected string $view = 'filament.widgets.custom-widget';
+    protected int|string|array $columnSpan = 'full'; // or specific span
+    protected static bool $isLazy = false; // for performance
+}
+```
+
+#### Responsive Behavior
+
+```php
+// Widget can specify its own column span
+protected int|string|array $columnSpan = [
+    'default' => 'full',
+    'md' => 2,
+    'lg' => 1,
+];
+```
+
+### Performance Considerations
+
+- Use `$isLazy = true` for expensive widgets
+- Cache frequently accessed data
+- Optimize database queries
+- Implement proper loading states
+
+### Best Practices
+
+1. **Keep widgets focused** on single responsibility
+2. **Use consistent naming** conventions
+3. **Provide loading states** for better UX
+4. **Handle empty states** gracefully
+5. **Make widgets interactive** where appropriate
+6. **Follow Filament v4 patterns** for consistency
+
+### Troubleshooting
+
+#### Common Issues
+
+1. **Widget not displaying**: Check if widget is added to `getWidgets()` array
+2. **Layout issues**: Verify column span configuration
+3. **Performance problems**: Enable lazy loading for expensive widgets
+4. **Data not updating**: Ensure proper Livewire reactivity
+
+#### Debugging Tips
+
+```php
+// Enable query logging for debugging
+DB::enableQueryLog();
+// ... widget operations
+$queries = DB::getQueryLog();
+
+// Monitor memory usage
+$memoryUsage = memory_get_usage(true);
+$peakMemory = memory_get_peak_usage(true);
+```
+
+### Future Enhancements
+
+- Real-time updates via WebSocket
+- Customizable widget positions
+- Widget-specific settings
+- Mobile-optimized layouts
+- Advanced filtering options

@@ -1,0 +1,10 @@
+{
+    "Core": true,
+    "Master": true,
+    "Organization": true,
+    "UserManagement": true,
+    "ActivityLog": true,
+    "Settings": true,
+    "Backup": true,
+    "System": true
+}

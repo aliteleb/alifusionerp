@@ -1,0 +1,1254 @@
+---
+description: when we need to create excel or csv exporter or edit for a filament resource
+alwaysApply: false
+---
+# Filament Exporter Development Rules
+
+## Overview
+
+This document provides comprehensive guidelines for creating professional, styled Filament v4 exporters in the Ali Fusion ERP platform. Use the TaskExporter as a reference implementation for all export functionality.
+
+## Core Exporter Structure
+
+### Basic Exporter Class Template
+
+```php
+<?php
+
+namespace App\Filament\Exports;
+
+use App\Models\{ModelName};
+use Filament\Actions\Exports\ExportColumn;
+use Filament\Actions\Exports\Exporter;
+use Filament\Actions\Exports\Models\Export;
+use Illuminate\Support\Number;
+use OpenSpout\Common\Entity\Cell;
+use OpenSpout\Common\Entity\Row;
+use OpenSpout\Common\Entity\Style\CellAlignment;
+use OpenSpout\Common\Entity\Style\Color;
+use OpenSpout\Common\Entity\Style\Style;
+use OpenSpout\Writer\XLSX\Entity\SheetView;
+use OpenSpout\Writer\XLSX\Options;
+use OpenSpout\Writer\XLSX\Writer;
+
+class {ModelName}Exporter extends Exporter
+{
+    protected static ?string $model = {ModelName}::class;
+
+    public static function getColumns(): array
+    {
+        return [
+            // Define all exportable columns here
+        ];
+    }
+
+    public static function getCompletedNotificationBody(Export $export): string
+    {
+        // Custom notification message
+    }
+
+    public function getJobConnection(): ?string
+    {
+        return 'sync';
+    }
+
+    // Styling methods...
+}
+```
+
+## Column Definition Standards
+
+### Required Column Patterns
+
+**Basic Column with Formatting:**
+```php
+ExportColumn::make('id')
+    ->label(__('ID'))
+    ->formatStateUsing(fn ($state) => '#'.$state),
+```
+
+**Column with Fallback Value:**
+```php
+ExportColumn::make('name')
+    ->label(__('Name'))
+    ->formatStateUsing(fn ($state) => $state ?: __('Untitled')),
+```
+
+**Relationship Column with Translation:**
+```php
+ExportColumn::make('category.name')
+    ->label(__('Category'))
+    ->state(function ({ModelName} $record): string {
+        return $record->category?->getTranslation('name', app()->getLocale()) ?? __('Uncategorized');
+    }),
+```
+
+**Enum Column with Label:**
+```php
+ExportColumn::make('status')
+    ->label(__('Status'))
+    ->state(function ({ModelName} $record): string {
+        return $record->status?->getLabel() ?? __('Unknown');
+    }),
+```
+
+**Date Column with Formatting:**
+```php
+ExportColumn::make('created_at')
+    ->label(__('Created At'))
+    ->formatStateUsing(fn ($state) => $state->format('Y-m-d H:i')),
+```
+
+**Numeric Column with Units:**
+```php
+ExportColumn::make('estimated_hours')
+    ->label(__('Estimated Hours'))
+    ->formatStateUsing(fn ($state) => $state ? $state.' hrs' : __('Not estimated')),
+```
+
+**Currency Column:**
+```php
+ExportColumn::make('hourly_rate')
+    ->label(__('Hourly Rate'))
+    ->formatStateUsing(fn ($state) => $state ? '$'.number_format($state, 2) : __('Not set')),
+```
+
+**Boolean Column with Translation:**
+```php
+ExportColumn::make('is_active')
+    ->label(__('Active'))
+    ->state(function ({ModelName} $record): string {
+        return $record->is_active ? __('Yes') : __('No');
+    }),
+```
+
+## Professional Styling Implementation
+
+### Column Width Configuration
+
+**Always set optimal column widths:**
+```php
+public function getXlsxWriterOptions(): ?Options
+{
+    $options = new Options;
+
+    // Set column widths for better readability
+    $options->setColumnWidth(8, 1);   // ID column
+    $options->setColumnWidth(40, 2);  // Name column
+    $options->setColumnWidth(50, 3);  // Description column
+    $options->setColumnWidth(20, 4);  // Category column
+    $options->setColumnWidth(20, 5);  // Status column
+    $options->setColumnWidth(12, 6);  // Priority column
+    $options->setColumnWidth(10, 7);  // Progress column
+    $options->setColumnWidth(20, 8);  // Assigned To column
+    $options->setColumnWidth(15, 9);  // Due Date column
+    $options->setColumnWidth(15, 10); // Estimated Hours column
+    $options->setColumnWidth(15, 11); // Hourly Rate column
+    $options->setColumnWidth(10, 12); // Billable column
+    $options->setColumnWidth(20, 13); // Created At column
+    $options->setColumnWidth(20, 14); // Updated At column
+
+    return $options;
+}
+```
+
+### Sheet Configuration
+
+**Configure sheet with frozen header:**
+```php
+public function configureXlsxWriterBeforeClose(Writer $writer): Writer
+{
+    // Configure sheet view with frozen header row
+    $sheetView = new SheetView;
+    $sheetView->setFreezeRow(1); // Freeze the header row
+
+    $sheet = $writer->getCurrentSheet();
+    $sheet->setSheetView($sheetView);
+    $sheet->setName('{ModelName} Export');
+
+    return $writer;
+}
+```
+
+### Individual Cell Styling
+
+**Override row creation methods for individual cell styling:**
+```php
+/**
+ * Override makeXlsxHeaderRow to create header cells with special styling
+ */
+public function makeXlsxHeaderRow(array $values, ?Style $style = null): Row
+{
+    $columnStyles = [];
+
+    // Apply special header styling to all columns
+    foreach ($values as $index => $value) {
+        $columnStyles[$index] = $this->getXlsxHeaderCellStyle();
+    }
+
+    // Create row with individual column styles
+    return Row::fromValuesWithStyles($values, null, $columnStyles);
+}
+
+/**
+ * Override makeXlsxRow to create individual cells with column-specific styling
+ */
+public function makeXlsxRow(array $values, ?Style $style = null): Row
+{
+    $columnStyles = [];
+
+    foreach ($values as $index => $value) {
+        // Get column-specific style for each cell
+        $columnStyles[$index] = $this->getXlsxColumnStyle($index, $value);
+    }
+
+    // Create row with individual column styles
+    return Row::fromValuesWithStyles($values, null, $columnStyles);
+}
+```
+
+## Color Scheme Standards
+
+### Header Styling
+
+**Professional header with midnight blue:**
+```php
+public function getXlsxHeaderRowStyle(): ?Style
+{
+    return (new Style)
+        ->setFontBold()
+        ->setFontSize(12)
+        ->setFontColor(Color::WHITE)
+        ->setBackgroundColor(Color::rgb(25, 25, 112)) // Midnight blue
+        ->setCellAlignment(CellAlignment::CENTER);
+}
+
+public function getXlsxHeaderCellStyle(): ?Style
+{
+    return (new Style)
+        ->setFontBold()
+        ->setFontSize(12)
+        ->setFontColor(Color::WHITE)
+        ->setBackgroundColor(Color::rgb(25, 25, 112)) // Midnight blue
+        ->setCellAlignment(CellAlignment::CENTER);
+}
+```
+
+### Column Group Color Scheme
+
+**Organize columns into logical groups with distinct colors:**
+
+```php
+public function getXlsxColumnStyle(int $columnIndex, mixed $value): ?Style
+{
+    $baseStyle = (new Style)->setFontSize(10);
+
+    return match ($columnIndex) {
+        // GROUP 1: Basic Information - Dark Brown Theme
+        0, 1, 2 => $baseStyle
+            ->setBackgroundColor(Color::rgb(139, 69, 19)) // Saddle brown
+            ->setFontColor(Color::rgb(255, 255, 255)), // White text
+
+        // GROUP 2: Classification - Light Green Theme
+        3, 4, 5, 6 => $baseStyle
+            ->setBackgroundColor(Color::rgb(144, 238, 144)) // Light green
+            ->setFontColor(Color::rgb(0, 100, 0)), // Dark green text
+
+        // GROUP 3: Assignment & Scheduling - Orange Theme
+        7, 8 => $baseStyle
+            ->setBackgroundColor(Color::rgb(255, 165, 0)) // Orange
+            ->setFontColor(Color::rgb(139, 69, 19)), // Saddle brown text
+
+        // GROUP 4: Financial - Medium Orchid Theme
+        9, 10, 11 => $baseStyle
+            ->setBackgroundColor(Color::rgb(186, 85, 211)) // Medium orchid
+            ->setFontColor(Color::rgb(75, 0, 130)), // Indigo text
+
+        // GROUP 5: Timestamps - Dark Gray Theme
+        12, 13 => $baseStyle
+            ->setBackgroundColor(Color::rgb(169, 169, 169)) // Dark gray
+            ->setFontColor(Color::rgb(47, 79, 79)), // Dark slate gray text
+
+        default => $baseStyle,
+    };
+}
+```
+
+### Status-Based Color Coding
+
+**Implement dynamic colors for status indicators:**
+
+```php
+private function getStatusColor(string $status): string
+{
+    return match (strtolower($status)) {
+        'completed' => Color::rgb(0, 128, 0), // Forest green
+        'in progress' => Color::rgb(0, 100, 200), // Deep blue
+        'pending' => Color::rgb(255, 140, 0), // Dark orange
+        'cancelled' => Color::rgb(220, 20, 60), // Crimson
+        'on hold' => Color::rgb(255, 69, 0), // Red orange
+        'blocked' => Color::rgb(128, 0, 128), // Purple
+        default => Color::rgb(105, 105, 105), // Dim gray
+    };
+}
+
+private function getPriorityColor(string $priority): string
+{
+    return match (strtolower($priority)) {
+        'high' => Color::rgb(220, 20, 60), // Crimson
+        'medium' => Color::rgb(255, 140, 0), // Dark orange
+        'low' => Color::rgb(0, 128, 0), // Forest green
+        'urgent' => Color::rgb(139, 0, 0), // Dark red
+        'critical' => Color::rgb(75, 0, 0), // Very dark red
+        default => Color::rgb(105, 105, 105), // Dim gray
+    };
+}
+
+private function getProgressColor(string $progress): string
+{
+    $percentage = (int) str_replace('%', '', $progress);
+
+    if ($percentage >= 100) {
+        return Color::rgb(0, 128, 0); // Forest green
+    } elseif ($percentage >= 75) {
+        return Color::rgb(50, 205, 50); // Lime green
+    } elseif ($percentage >= 50) {
+        return Color::rgb(255, 140, 0); // Dark orange
+    } elseif ($percentage >= 25) {
+        return Color::rgb(255, 69, 0); // Red orange
+    } elseif ($percentage > 0) {
+        return Color::rgb(0, 100, 200); // Deep blue
+    }
+
+    return Color::rgb(128, 128, 128); // Gray
+}
+
+private function getBillableColor(string $billable): string
+{
+    return $billable === __('Yes')
+        ? Color::rgb(0, 128, 0) // Forest green
+        : Color::rgb(220, 20, 60); // Crimson
+}
+```
+
+## Integration with Filament Pages
+
+### List Page Integration
+
+**Add export action to List page:**
+
+```php
+<?php
+
+namespace App\Filament\Resources\{ModelName}\Pages;
+
+use App\Filament\Exports\{ModelName}Exporter;
+use App\Filament\Resources\{ModelName}Resource;
+use Filament\Actions\CreateAction;
+use Filament\Actions\ExportAction;
+use Filament\Actions\Exports\Enums\ExportFormat;
+use Filament\Resources\Pages\ListRecords;
+
+class List{ModelName} extends ListRecords
+{
+    protected static string $resource = {ModelName}Resource::class;
+
+    public function getTitle(): string
+    {
+        return __('{ModelName}s');
+    }
+
+    protected function getHeaderActions(): array
+    {
+        return [
+            CreateAction::make()
+                ->label(__('New {ModelName}')),
+
+            ExportAction::make()
+                ->label(__('Export {ModelName}s'))
+                ->icon(Heroicon::ArrowDownTray)
+                ->color('success')
+                ->exporter({ModelName}Exporter::class)
+                ->fileName(fn () => '{modelname}s-'.now()->format('Y-m-d-H-i-s'))
+                ->formats([
+                    ExportFormat::Xlsx,
+                    ExportFormat::Csv,
+                ])
+                ->columnMappingColumns(3), // 3-column layout for column selection
+        ];
+    }
+}
+```
+
+## Translation Standards
+
+### Required Translation Keys
+
+**Always wrap user-facing text with `__()` function:**
+
+```php
+// Column labels
+->label(__('ID'))
+->label(__('Task Name'))
+->label(__('Description'))
+
+// Fallback values
+->formatStateUsing(fn ($state) => $state ?: __('Untitled Task'))
+->formatStateUsing(fn ($state) => $state ?: __('No description'))
+
+// Enum fallbacks
+return $record->status?->getLabel() ?? __('Unknown');
+return $record->priority?->getLabel() ?? __('Normal');
+
+// Boolean values
+return $record->is_billable ? __('Yes') : __('No');
+```
+
+### Notification Messages
+
+**Custom notification with proper pluralization:**
+
+```php
+public static function getCompletedNotificationBody(Export $export): string
+{
+    $body = 'Your {modelname} export has completed and '.Number::format($export->successful_rows).' '.str('row')->plural($export->successful_rows).' exported.';
+
+    if ($failedRowsCount = $export->getFailedRowsCount()) {
+        $body .= ' '.Number::format($failedRowsCount).' '.str('row')->plural($failedRowsCount).' failed to export.';
+    }
+
+    return $body;
+}
+```
+
+## Performance Considerations
+
+### Memory Management
+
+**Set appropriate job connection:**
+```php
+public function getJobConnection(): ?string
+{
+    return 'sync'; // Use 'database' or 'redis' for large exports
+}
+```
+
+### Large Dataset Handling
+
+**For exports with thousands of records:**
+- Use `'database'` or `'redis'` job connection
+- Implement chunked processing in the exporter
+- Set memory limits: 2GB limit, 600s execution time
+- Consider background job processing
+
+## Multi-Language Support
+
+### Locale Detection
+
+**Use user's session language, not app default:**
+```php
+// Correct approach
+return $record->category?->getTranslation('name', app()->getLocale()) ?? __('Uncategorized');
+
+// For exports, detect user language from session/headers/cookies
+private function getUserLocale(): string
+{
+    return session('locale') ?? request()->header('Accept-Language') ?? 'en';
+}
+```
+
+### UTF-8 Support
+
+**For Arabic/Kurdish text:**
+- Include UTF-8 BOM (`\xEF\xBB\xBF`) for CSV exports
+- Use proper font support in PDF exports
+- Test with different language scenarios
+
+## Testing Standards
+
+### Exporter Testing Template
+
+```php
+<?php
+
+require_once __DIR__ . '/../vendor/autoload.php';
+$app = require_once __DIR__ . '/../bootstrap/app.php';
+$app->make(\Illuminate\Contracts\Console\Kernel::class)->bootstrap();
+
+use App\Services\TenantDatabaseService;
+use App\Models\Facility;
+use App\Models\{ModelName};
+use App\Filament\Exports\{ModelName}Exporter;
+
+echo "Testing {ModelName} Exporter...\n";
+
+// Connect to tenant database
+$facility = Facility::first();
+if (!$facility) {
+    echo "❌ No facility found\n";
+    exit(1);
+}
+
+TenantDatabaseService::connectToFacility($facility);
+echo "✅ Connected to facility: {$facility->name}\n";
+
+// Check records
+$records = {ModelName}::with(['category', 'assignedTo'])->take(5)->get();
+echo "✅ Found {$records->count()} records\n";
+
+// Test exporter
+try {
+    $columns = {ModelName}Exporter::getColumns();
+    echo "✅ Exporter has " . count($columns) . " columns\n";
+    
+    echo "\n🎨 Styling Features:\n";
+    echo "   • Professional header with midnight blue background\n";
+    echo "   • Column groups with distinct background colors\n";
+    echo "   • Status-based color coding\n";
+    echo "   • Enhanced data formatting\n";
+    echo "   • Optimal column widths\n";
+    echo "   • Frozen header row\n";
+    
+    echo "\n🎉 Exporter is ready!\n";
+    
+} catch (Exception $e) {
+    echo "❌ Error testing exporter: " . $e->getMessage() . "\n";
+    exit(1);
+}
+
+echo "\n✅ Exporter test completed successfully!\n";
+```
+
+## Common Patterns by Model Type
+
+### Customer Exporter
+- Include contact information (phone, email)
+- Add customer group and branch information
+- Include creation and last activity dates
+- Group: Basic Info (Blue), Contact (Green), Business (Orange), Financial (Purple), Timestamps (Gray)
+
+### Employee Exporter
+- Include personal information and department
+- Add designation and warehouse information
+- Include employment dates and status
+- Group: Personal (Blue), Work Info (Green), Assignment (Orange), Financial (Purple), Employment (Gray)
+
+### Opportunity Exporter
+- Include customer and product information
+- Add stage and probability data
+- Include expected close date and value
+- Group: Basic (Blue), Classification (Green), Customer (Orange), Financial (Purple), Timeline (Gray)
+
+### Task Exporter (Reference Implementation)
+- Complete implementation with all styling features
+- 14 columns with professional formatting
+- 5 color groups with distinct themes
+- Status, priority, and progress color coding
+- Enhanced data formatting with fallbacks
+
+## Best Practices
+
+### Code Organization
+1. **Always** create exporters in `app/Filament/Exports/`
+2. **Always** use descriptive column labels with translations
+3. **Always** implement proper fallback values for empty data
+4. **Always** use column groups for visual organization
+5. **Always** test with different data scenarios
+
+### Styling Guidelines
+1. **Use** darker, more vibrant colors for better visibility
+2. **Apply** consistent color schemes across all exporters
+3. **Implement** status-based color coding where applicable
+4. **Ensure** proper contrast between text and background colors
+5. **Freeze** header rows for better navigation
+
+### Performance Guidelines
+1. **Set** appropriate column widths for optimal display
+2. **Use** efficient data formatting methods
+3. **Implement** proper memory management for large exports
+4. **Consider** background job processing for heavy operations
+5. **Test** with realistic data volumes
+
+## Troubleshooting
+
+### Common Issues
+- **Undefined method errors**: Use correct OpenSpout methods (`Row::fromValuesWithStyles`)
+- **Missing styling**: Ensure `makeXlsxRow` and `makeXlsxHeaderRow` are overridden
+- **Color not applied**: Check that `getXlsxColumnStyle` returns proper Style objects
+- **Memory issues**: Use appropriate job connection and chunked processing
+- **Translation issues**: Always use `__()` function and test with different locales
+
+### Debugging Tips
+- Test exporter with small datasets first
+- Verify column indexes match the styling logic
+- Check OpenSpout version compatibility
+- Use test scripts to validate functionality
+- Monitor memory usage during large exports
+
+---
+
+**Note**: Use the TaskExporter as the reference implementation. Follow these patterns consistently for all exporters in the Ali Fusion ERP platform. Always test thoroughly with different data scenarios and language settings.# Filament Exporter Development Rules
+
+## Overview
+
+This document provides comprehensive guidelines for creating professional, styled Filament v4 exporters in the Ali Fusion ERP platform. Use the TaskExporter as a reference implementation for all export functionality.
+
+## Core Exporter Structure
+
+### Basic Exporter Class Template
+
+```php
+<?php
+
+namespace App\Filament\Exports;
+
+use App\Models\{ModelName};
+use Filament\Actions\Exports\ExportColumn;
+use Filament\Actions\Exports\Exporter;
+use Filament\Actions\Exports\Models\Export;
+use Illuminate\Support\Number;
+use OpenSpout\Common\Entity\Cell;
+use OpenSpout\Common\Entity\Row;
+use OpenSpout\Common\Entity\Style\CellAlignment;
+use OpenSpout\Common\Entity\Style\Color;
+use OpenSpout\Common\Entity\Style\Style;
+use OpenSpout\Writer\XLSX\Entity\SheetView;
+use OpenSpout\Writer\XLSX\Options;
+use OpenSpout\Writer\XLSX\Writer;
+
+class {ModelName}Exporter extends Exporter
+{
+    protected static ?string $model = {ModelName}::class;
+
+    public static function getColumns(): array
+    {
+        return [
+            // Define all exportable columns here
+        ];
+    }
+
+    public static function getCompletedNotificationBody(Export $export): string
+    {
+        // Custom notification message
+    }
+
+    public function getJobConnection(): ?string
+    {
+        return 'sync';
+    }
+
+    // Styling methods...
+}
+```
+
+## Column Definition Standards
+
+### Required Column Patterns
+
+**Basic Column with Formatting:**
+```php
+ExportColumn::make('id')
+    ->label(__('ID'))
+    ->formatStateUsing(fn ($state) => '#'.$state),
+```
+
+**Column with Fallback Value:**
+```php
+ExportColumn::make('name')
+    ->label(__('Name'))
+    ->formatStateUsing(fn ($state) => $state ?: __('Untitled')),
+```
+
+**Relationship Column with Translation:**
+```php
+ExportColumn::make('category.name')
+    ->label(__('Category'))
+    ->state(function ({ModelName} $record): string {
+        return $record->category?->getTranslation('name', app()->getLocale()) ?? __('Uncategorized');
+    }),
+```
+
+**Enum Column with Label:**
+```php
+ExportColumn::make('status')
+    ->label(__('Status'))
+    ->state(function ({ModelName} $record): string {
+        return $record->status?->getLabel() ?? __('Unknown');
+    }),
+```
+
+**Date Column with Formatting:**
+```php
+ExportColumn::make('created_at')
+    ->label(__('Created At'))
+    ->formatStateUsing(fn ($state) => $state->format('Y-m-d H:i')),
+```
+
+**Numeric Column with Units:**
+```php
+ExportColumn::make('estimated_hours')
+    ->label(__('Estimated Hours'))
+    ->formatStateUsing(fn ($state) => $state ? $state.' hrs' : __('Not estimated')),
+```
+
+**Currency Column:**
+```php
+ExportColumn::make('hourly_rate')
+    ->label(__('Hourly Rate'))
+    ->formatStateUsing(fn ($state) => $state ? '$'.number_format($state, 2) : __('Not set')),
+```
+
+**Boolean Column with Translation:**
+```php
+ExportColumn::make('is_active')
+    ->label(__('Active'))
+    ->state(function ({ModelName} $record): string {
+        return $record->is_active ? __('Yes') : __('No');
+    }),
+```
+
+## Professional Styling Implementation
+
+### Column Width Configuration
+
+**Always set optimal column widths:**
+```php
+public function getXlsxWriterOptions(): ?Options
+{
+    $options = new Options;
+
+    // Set column widths for better readability
+    $options->setColumnWidth(8, 1);   // ID column
+    $options->setColumnWidth(40, 2);  // Name column
+    $options->setColumnWidth(50, 3);  // Description column
+    $options->setColumnWidth(20, 4);  // Category column
+    $options->setColumnWidth(20, 5);  // Status column
+    $options->setColumnWidth(12, 6);  // Priority column
+    $options->setColumnWidth(10, 7);  // Progress column
+    $options->setColumnWidth(20, 8);  // Assigned To column
+    $options->setColumnWidth(15, 9);  // Due Date column
+    $options->setColumnWidth(15, 10); // Estimated Hours column
+    $options->setColumnWidth(15, 11); // Hourly Rate column
+    $options->setColumnWidth(10, 12); // Billable column
+    $options->setColumnWidth(20, 13); // Created At column
+    $options->setColumnWidth(20, 14); // Updated At column
+
+    return $options;
+}
+```
+
+### Sheet Configuration
+
+**Configure sheet with frozen header:**
+```php
+public function configureXlsxWriterBeforeClose(Writer $writer): Writer
+{
+    // Configure sheet view with frozen header row
+    $sheetView = new SheetView;
+    $sheetView->setFreezeRow(1); // Freeze the header row
+
+    $sheet = $writer->getCurrentSheet();
+    $sheet->setSheetView($sheetView);
+    $sheet->setName('{ModelName} Export');
+
+    return $writer;
+}
+```
+
+### Individual Cell Styling
+
+**Override row creation methods for individual cell styling:**
+```php
+/**
+ * Override makeXlsxHeaderRow to create header cells with special styling
+ */
+public function makeXlsxHeaderRow(array $values, ?Style $style = null): Row
+{
+    $columnStyles = [];
+
+    // Apply special header styling to all columns
+    foreach ($values as $index => $value) {
+        $columnStyles[$index] = $this->getXlsxHeaderCellStyle();
+    }
+
+    // Create row with individual column styles
+    return Row::fromValuesWithStyles($values, null, $columnStyles);
+}
+
+/**
+ * Override makeXlsxRow to create individual cells with column-specific styling
+ */
+public function makeXlsxRow(array $values, ?Style $style = null): Row
+{
+    $columnStyles = [];
+
+    foreach ($values as $index => $value) {
+        // Get column-specific style for each cell
+        $columnStyles[$index] = $this->getXlsxColumnStyle($index, $value);
+    }
+
+    // Create row with individual column styles
+    return Row::fromValuesWithStyles($values, null, $columnStyles);
+}
+```
+
+## Color Scheme Standards
+
+### Header Styling
+
+**Professional header with midnight blue:**
+```php
+public function getXlsxHeaderRowStyle(): ?Style
+{
+    return (new Style)
+        ->setFontBold()
+        ->setFontSize(12)
+        ->setFontColor(Color::WHITE)
+        ->setBackgroundColor(Color::rgb(25, 25, 112)) // Midnight blue
+        ->setCellAlignment(CellAlignment::CENTER);
+}
+
+public function getXlsxHeaderCellStyle(): ?Style
+{
+    return (new Style)
+        ->setFontBold()
+        ->setFontSize(12)
+        ->setFontColor(Color::WHITE)
+        ->setBackgroundColor(Color::rgb(25, 25, 112)) // Midnight blue
+        ->setCellAlignment(CellAlignment::CENTER);
+}
+```
+
+### Column Group Color Scheme
+
+**Organize columns into logical groups with distinct colors:**
+
+```php
+public function getXlsxColumnStyle(int $columnIndex, mixed $value): ?Style
+{
+    $baseStyle = (new Style)->setFontSize(10);
+
+    return match ($columnIndex) {
+        // GROUP 1: Basic Information - Dark Brown Theme
+        0, 1, 2 => $baseStyle
+            ->setBackgroundColor(Color::rgb(139, 69, 19)) // Saddle brown
+            ->setFontColor(Color::rgb(255, 255, 255)), // White text
+
+        // GROUP 2: Classification - Light Green Theme
+        3, 4, 5, 6 => $baseStyle
+            ->setBackgroundColor(Color::rgb(144, 238, 144)) // Light green
+            ->setFontColor(Color::rgb(0, 100, 0)), // Dark green text
+
+        // GROUP 3: Assignment & Scheduling - Orange Theme
+        7, 8 => $baseStyle
+            ->setBackgroundColor(Color::rgb(255, 165, 0)) // Orange
+            ->setFontColor(Color::rgb(139, 69, 19)), // Saddle brown text
+
+        // GROUP 4: Financial - Medium Orchid Theme
+        9, 10, 11 => $baseStyle
+            ->setBackgroundColor(Color::rgb(186, 85, 211)) // Medium orchid
+            ->setFontColor(Color::rgb(75, 0, 130)), // Indigo text
+
+        // GROUP 5: Timestamps - Dark Gray Theme
+        12, 13 => $baseStyle
+            ->setBackgroundColor(Color::rgb(169, 169, 169)) // Dark gray
+            ->setFontColor(Color::rgb(47, 79, 79)), // Dark slate gray text
+
+        default => $baseStyle,
+    };
+}
+```
+
+### Status-Based Color Coding
+
+**Implement dynamic colors for status indicators:**
+
+```php
+private function getStatusColor(string $status): string
+{
+    return match (strtolower($status)) {
+        'completed' => Color::rgb(0, 128, 0), // Forest green
+        'in progress' => Color::rgb(0, 100, 200), // Deep blue
+        'pending' => Color::rgb(255, 140, 0), // Dark orange
+        'cancelled' => Color::rgb(220, 20, 60), // Crimson
+        'on hold' => Color::rgb(255, 69, 0), // Red orange
+        'blocked' => Color::rgb(128, 0, 128), // Purple
+        default => Color::rgb(105, 105, 105), // Dim gray
+    };
+}
+
+private function getPriorityColor(string $priority): string
+{
+    return match (strtolower($priority)) {
+        'high' => Color::rgb(220, 20, 60), // Crimson
+        'medium' => Color::rgb(255, 140, 0), // Dark orange
+        'low' => Color::rgb(0, 128, 0), // Forest green
+        'urgent' => Color::rgb(139, 0, 0), // Dark red
+        'critical' => Color::rgb(75, 0, 0), // Very dark red
+        default => Color::rgb(105, 105, 105), // Dim gray
+    };
+}
+
+private function getProgressColor(string $progress): string
+{
+    $percentage = (int) str_replace('%', '', $progress);
+
+    if ($percentage >= 100) {
+        return Color::rgb(0, 128, 0); // Forest green
+    } elseif ($percentage >= 75) {
+        return Color::rgb(50, 205, 50); // Lime green
+    } elseif ($percentage >= 50) {
+        return Color::rgb(255, 140, 0); // Dark orange
+    } elseif ($percentage >= 25) {
+        return Color::rgb(255, 69, 0); // Red orange
+    } elseif ($percentage > 0) {
+        return Color::rgb(0, 100, 200); // Deep blue
+    }
+
+    return Color::rgb(128, 128, 128); // Gray
+}
+
+private function getBillableColor(string $billable): string
+{
+    return $billable === __('Yes')
+        ? Color::rgb(0, 128, 0) // Forest green
+        : Color::rgb(220, 20, 60); // Crimson
+}
+```
+
+## Integration with Filament Pages
+
+### List Page Integration
+
+**Add export action to List page:**
+
+```php
+<?php
+
+namespace App\Filament\Resources\{ModelName}\Pages;
+
+use App\Filament\Exports\{ModelName}Exporter;
+use App\Filament\Resources\{ModelName}Resource;
+use Filament\Actions\CreateAction;
+use Filament\Actions\ExportAction;
+use Filament\Actions\Exports\Enums\ExportFormat;
+use Filament\Resources\Pages\ListRecords;
+
+class List{ModelName} extends ListRecords
+{
+    protected static string $resource = {ModelName}Resource::class;
+
+    public function getTitle(): string
+    {
+        return __('{ModelName}s');
+    }
+
+    protected function getHeaderActions(): array
+    {
+        return [
+            CreateAction::make()
+                ->label(__('New {ModelName}')),
+
+            ExportAction::make()
+                ->label(__('Export {ModelName}s'))
+                ->icon(Heroicon::ArrowDownTray)
+                ->color('success')
+                ->exporter({ModelName}Exporter::class)
+                ->fileName(fn () => '{modelname}s-'.now()->format('Y-m-d-H-i-s'))
+                ->formats([
+                    ExportFormat::Xlsx,
+                    ExportFormat::Csv,
+                ])
+                ->columnMappingColumns(3), // 3-column layout for column selection
+        ];
+    }
+}
+```
+
+## Translation Standards
+
+### Required Translation Keys
+
+**Always wrap user-facing text with `__()` function:**
+
+```php
+// Column labels
+->label(__('ID'))
+->label(__('Task Name'))
+->label(__('Description'))
+
+// Fallback values
+->formatStateUsing(fn ($state) => $state ?: __('Untitled Task'))
+->formatStateUsing(fn ($state) => $state ?: __('No description'))
+
+// Enum fallbacks
+return $record->status?->getLabel() ?? __('Unknown');
+return $record->priority?->getLabel() ?? __('Normal');
+
+// Boolean values
+return $record->is_billable ? __('Yes') : __('No');
+```
+
+### Notification Messages
+
+**Custom notification with proper pluralization:**
+
+```php
+public static function getCompletedNotificationBody(Export $export): string
+{
+    $body = 'Your {modelname} export has completed and '.Number::format($export->successful_rows).' '.str('row')->plural($export->successful_rows).' exported.';
+
+    if ($failedRowsCount = $export->getFailedRowsCount()) {
+        $body .= ' '.Number::format($failedRowsCount).' '.str('row')->plural($failedRowsCount).' failed to export.';
+    }
+
+    return $body;
+}
+```
+
+## Performance Considerations
+
+### Memory Management
+
+**Set appropriate job connection:**
+```php
+public function getJobConnection(): ?string
+{
+    return 'sync'; // Use 'database' or 'redis' for large exports
+}
+```
+
+### Large Dataset Handling
+
+**For exports with thousands of records:**
+- Use `'database'` or `'redis'` job connection
+- Implement chunked processing in the exporter
+- Set memory limits: 2GB limit, 600s execution time
+- Consider background job processing
+
+## Multi-Language Support
+
+### Locale Detection
+
+**Use user's session language, not app default:**
+```php
+// Correct approach
+return $record->category?->getTranslation('name', app()->getLocale()) ?? __('Uncategorized');
+
+// For exports, detect user language from session/headers/cookies
+private function getUserLocale(): string
+{
+    return session('locale') ?? request()->header('Accept-Language') ?? 'en';
+}
+```
+
+### UTF-8 Support
+
+**For Arabic/Kurdish text:**
+- Include UTF-8 BOM (`\xEF\xBB\xBF`) for CSV exports
+- Use proper font support in PDF exports
+- Test with different language scenarios
+
+## Testing Standards
+
+### Exporter Testing Template
+
+```php
+<?php
+
+require_once __DIR__ . '/../vendor/autoload.php';
+$app = require_once __DIR__ . '/../bootstrap/app.php';
+$app->make(\Illuminate\Contracts\Console\Kernel::class)->bootstrap();
+
+use App\Services\TenantDatabaseService;
+use App\Models\Facility;
+use App\Models\{ModelName};
+use App\Filament\Exports\{ModelName}Exporter;
+
+echo "Testing {ModelName} Exporter...\n";
+
+// Connect to tenant database
+$facility = Facility::first();
+if (!$facility) {
+    echo "❌ No facility found\n";
+    exit(1);
+}
+
+TenantDatabaseService::connectToFacility($facility);
+echo "✅ Connected to facility: {$facility->name}\n";
+
+// Check records
+$records = {ModelName}::with(['category', 'assignedTo'])->take(5)->get();
+echo "✅ Found {$records->count()} records\n";
+
+// Test exporter
+try {
+    $columns = {ModelName}Exporter::getColumns();
+    echo "✅ Exporter has " . count($columns) . " columns\n";
+    
+    echo "\n🎨 Styling Features:\n";
+    echo "   • Professional header with midnight blue background\n";
+    echo "   • Column groups with distinct background colors\n";
+    echo "   • Status-based color coding\n";
+    echo "   • Enhanced data formatting\n";
+    echo "   • Optimal column widths\n";
+    echo "   • Frozen header row\n";
+    
+    echo "\n🎉 Exporter is ready!\n";
+    
+} catch (Exception $e) {
+    echo "❌ Error testing exporter: " . $e->getMessage() . "\n";
+    exit(1);
+}
+
+echo "\n✅ Exporter test completed successfully!\n";
+```
+
+## Common Patterns by Model Type
+
+### Customer Exporter
+- Include contact information (phone, email)
+- Add customer group and branch information
+- Include creation and last activity dates
+- Group: Basic Info (Blue), Contact (Green), Business (Orange), Financial (Purple), Timestamps (Gray)
+
+### Employee Exporter
+- Include personal information and department
+- Add designation and warehouse information
+- Include employment dates and status
+- Group: Personal (Blue), Work Info (Green), Assignment (Orange), Financial (Purple), Employment (Gray)
+
+### Opportunity Exporter
+- Include customer and product information
+- Add stage and probability data
+- Include expected close date and value
+- Group: Basic (Blue), Classification (Green), Customer (Orange), Financial (Purple), Timeline (Gray)
+
+### Task Exporter (Reference Implementation)
+- Complete implementation with all styling features
+- 14 columns with professional formatting
+- 5 color groups with distinct themes
+- Status, priority, and progress color coding
+- Enhanced data formatting with fallbacks
+
+## Best Practices
+
+### Code Organization
+1. **Always** create exporters in `app/Filament/Exports/`
+2. **Always** use descriptive column labels with translations
+3. **Always** implement proper fallback values for empty data
+4. **Always** use column groups for visual organization
+5. **Always** test with different data scenarios
+
+### Styling Guidelines
+1. **Use** darker, more vibrant colors for better visibility
+2. **Apply** consistent color schemes across all exporters
+3. **Implement** status-based color coding where applicable
+4. **Ensure** proper contrast between text and background colors
+5. **Freeze** header rows for better navigation
+
+### Performance Guidelines
+1. **Set** appropriate column widths for optimal display
+2. **Use** efficient data formatting methods
+3. **Implement** proper memory management for large exports
+4. **Consider** background job processing for heavy operations
+5. **Test** with realistic data volumes
+
+## Troubleshooting
+
+### Common Issues
+- **Undefined method errors**: Use correct OpenSpout methods (`Row::fromValuesWithStyles`)
+- **Missing styling**: Ensure `makeXlsxRow` and `makeXlsxHeaderRow` are overridden
+- **Color not applied**: Check that `getXlsxColumnStyle` returns proper Style objects
+- **Memory issues**: Use appropriate job connection and chunked processing
+- **Translation issues**: Always use `__()` function and test with different locales
+
+### Debugging Tips
+- Test exporter with small datasets first
+- Verify column indexes match the styling logic
+- Check OpenSpout version compatibility
+- Use test scripts to validate functionality
+- Monitor memory usage during large exports
+
+---
+
+**Note**: Use the TaskExporter as the reference implementation. Follow these patterns consistently for all exporters in the Ali Fusion ERP platform. Always test thoroughly with different data scenarios and language settings.
+## Troubleshooting Common Export Issues
+
+### Array/String Type Errors
+
+## Troubleshooting Common Export Issues
+
+### Array/String Type Errors
+
+**Problem:** `implode(): Argument #2 ($array) must be of type ?array, string given`
+
+**Cause:** Database fields stored as strings instead of arrays, but exporter code assumes array format.
+
+**Solution:** Handle both array and string formats in `formatStateUsing`:
+
+```php
+ExportColumn::make('channels')
+    ->label(__('Channels'))
+    ->formatStateUsing(function ($state) {
+        if (!$state) {
+            return __('No channels');
+        }
+        
+        // Handle both array and string formats
+        if (is_array($state)) {
+            return implode(', ', $state);
+        }
+        
+        // If it's a string, return as is
+        return (string) $state;
+    }),
+```
+
+**Example:** MarketingCampaignExporter channels column fix for mixed data types.
+
+### Enum Method Errors
+
+**Problem:** `Call to undefined method App\Enums\SomeEnum::getLabel()`
+
+**Cause:** Different enums use different method names for labels (`getLabel()` vs `label()`).
+
+**Solution:** Check enum implementation and use correct method:
+
+```php
+// For enums with getLabel() method
+ExportColumn::make('status')
+    ->state(function ($record): string {
+        return $record->status?->getLabel() ?? __('No status');
+    }),
+
+// For enums with label() method  
+ExportColumn::make('source')
+    ->state(function ($record): string {
+        return $record->source?->label() ?? __('No source');
+    }),
+```
+
+### Export Failures
+
+**Problem:** "0 rows exported. X rows failed to export"
+
+**Common Causes:**
+1. Type mismatches in column formatting
+2. Missing enum method calls
+3. Database connection issues
+4. Invalid data types
+
+**Debug Steps:**
+1. Check Laravel logs for specific error messages
+2. Verify enum method names match implementation
+3. Test column formatting with different data types
+4. Ensure proper string casting for all values
+
+### Best Practices for Error Prevention
+
+1. **Always** handle mixed data types (arrays/strings) safely
+2. **Always** verify enum method names before using them
+3. **Always** implement proper fallback values for empty data
+4. **Always** test with different data scenarios
+5. **Always** check Laravel logs when exports fail

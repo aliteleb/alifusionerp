@@ -1,0 +1,843 @@
+---
+description: when creating or editing widgets
+alwaysApply: false
+---
+# Ali Fusion ERP Widgets Documentation
+
+## Widgets System Overview
+
+Ali Fusion ERP includes 6 main widgets that provide real-time insights and quick access to key functionality.
+
+## Available Widgets
+
+### 1. AlertsWidget
+**Purpose**: Shows critical alerts and notifications requiring immediate attention
+
+**Features**:
+- Overdue tasks count
+- Unresolved tickets
+- Expiring contracts
+- New leads
+- Pending approvals
+
+**Implementation**:
+```php
+// app/Filament/Widgets/AlertsWidget.php
+class AlertsWidget extends Widget
+{
+    protected string $view = 'filament.widgets.alerts-widget';
+    protected int|string|array $columnSpan = 'full';
+    protected static bool $isLazy = false;
+
+    public function getAlerts(): array
+    {
+        return [
+            [
+                'type' => 'urgent',
+                'title' => __('Overdue Tasks'),
+                'count' => \App\Models\Task::where('due_date', '<', now())
+                    ->whereIn('status', ['not_started', 'in_progress'])
+                    ->count(),
+                'icon' => 'heroicon-o-exclamation-triangle',
+                'color' => 'danger',
+                'url' => route('filament.admin.resources.tasks.index', ['tableFilters[status][value]' => 'overdue']),
+            ],
+            [
+                'type' => 'warning',
+                'title' => __('Unresolved Tickets'),
+                'count' => \App\Models\Ticket::whereIn('status', ['open', 'in_progress', 'answered', 'waiting_client'])
+                    ->where('created_at', '<', now()->subDays(3))
+                    ->count(),
+                'icon' => 'heroicon-o-lifebuoy',
+                'color' => 'warning',
+                'url' => route('filament.admin.resources.tickets.index', ['tableFilters[status][value]' => 'unresolved']),
+            ],
+            [
+                'type' => 'info',
+                'title' => __('Expiring Contracts'),
+                'count' => \App\Models\Contract::where('end_date', '<=', now()->addDays(30))
+                    ->where('end_date', '>', now())
+                    ->where('status', 'active')
+                    ->count(),
+                'icon' => 'heroicon-o-document-text',
+                'color' => 'info',
+                'url' => route('filament.admin.resources.contracts.index', ['tableFilters[status][value]' => 'expiring']),
+            ],
+            [
+                'type' => 'success',
+                'title' => __('New Leads'),
+                'count' => \App\Models\Client::where('created_at', '>=', now()->subDays(7))
+                    ->where('is_active', true)
+                    ->count(),
+                'icon' => 'heroicon-o-user-plus',
+                'color' => 'success',
+                'url' => route('filament.admin.resources.clients.index', ['tableFilters[created_at][value]' => 'recent']),
+            ],
+            [
+                'type' => 'secondary',
+                'title' => __('Pending Approvals'),
+                'count' => \App\Models\Contract::where('status', 'pending')->count() +
+                    \App\Models\Deal::where('status', 'pending')->count(),
+                'icon' => 'heroicon-o-clock',
+                'color' => 'secondary',
+                'url' => route('filament.admin.resources.contracts.index', ['tableFilters[status][value]' => 'pending']),
+            ],
+        ];
+    }
+}
+```
+
+### 2. SalesPipelineWidget
+**Purpose**: Visualizes sales pipeline with stages and values
+
+**Features**:
+- Pipeline stages (Lead → Qualified → Proposal → Negotiation → Closed Won)
+- Stage counts and values
+- Total pipeline value
+- Monthly won revenue
+- Top performers
+
+**Implementation**:
+```php
+// app/Filament/Widgets/SalesPipelineWidget.php
+class SalesPipelineWidget extends Widget
+{
+    protected string $view = 'filament.widgets.sales-pipeline-widget';
+    protected int|string|array $columnSpan = 'full';
+    protected static bool $isLazy = false;
+
+    public function getPipelineData(): array
+    {
+        return [
+            'stages' => [
+                'lead' => [
+                    'name' => __('Leads'),
+                    'count' => \App\Models\Client::where('is_active', true)->count(),
+                    'value' => 0, // Leads don't have value yet
+                    'color' => '#6b7280',
+                ],
+                'qualified' => [
+                    'name' => __('Qualified'),
+                    'count' => \App\Models\Deal::where('status', 'open')->count(),
+                    'value' => \App\Models\Deal::where('status', 'open')->sum('deal_value') ?? 0,
+                    'color' => '#3b82f6',
+                ],
+                'proposal' => [
+                    'name' => __('Proposal'),
+                    'count' => \App\Models\Deal::where('stage', 'proposal')->count(),
+                    'value' => \App\Models\Deal::where('stage', 'proposal')->sum('deal_value') ?? 0,
+                    'color' => '#f59e0b',
+                ],
+                'negotiation' => [
+                    'name' => __('Negotiation'),
+                    'count' => \App\Models\Deal::where('stage', 'negotiation')->count(),
+                    'value' => \App\Models\Deal::where('stage', 'negotiation')->sum('deal_value') ?? 0,
+                    'color' => '#8b5cf6',
+                ],
+                'closed_won' => [
+                    'name' => __('Closed Won'),
+                    'count' => \App\Models\Deal::where('status', 'won')->count(),
+                    'value' => \App\Models\Deal::where('status', 'won')->sum('deal_value') ?? 0,
+                    'color' => '#10b981',
+                ],
+            ],
+            'total_pipeline_value' => \App\Models\Deal::whereIn('status', ['open', 'won'])->whereIn('stage', ['proposal', 'negotiation', 'decision'])->sum('deal_value') ?? 0,
+            'won_this_month' => \App\Models\Deal::where('status', 'won')
+                ->where('updated_at', '>=', now()->startOfMonth())
+                ->sum('deal_value') ?? 0,
+            'target' => 100000, // You can make this dynamic
+        ];
+    }
+
+    public function getTopPerformers(): array
+    {
+        // This would need to be implemented based on your user/employee structure
+        return [
+            [
+                'name' => __('Sales Rep 1'),
+                'deals_won' => 5,
+                'revenue' => 25000,
+            ],
+            [
+                'name' => __('Sales Rep 2'),
+                'deals_won' => 3,
+                'revenue' => 18000,
+            ],
+        ];
+    }
+}
+```
+
+### 3. CustomerHealthWidget
+**Purpose**: Shows customer health metrics and engagement levels
+
+**Features**:
+- Customer health scores
+- Engagement levels
+- Risk indicators
+- Health trends
+
+**Implementation**:
+```php
+// app/Filament/Widgets/CustomerHealthWidget.php
+class CustomerHealthWidget extends Widget
+{
+    protected string $view = 'filament.widgets.customer-health-widget';
+    protected int|string|array $columnSpan = 'full';
+    protected static bool $isLazy = false;
+
+    public function getCustomerHealthData(): array
+    {
+        // Implementation for customer health metrics
+        return [
+            'healthy' => \App\Models\Client::where('health_score', '>=', 80)->count(),
+            'at_risk' => \App\Models\Client::whereBetween('health_score', [50, 79])->count(),
+            'critical' => \App\Models\Client::where('health_score', '<', 50)->count(),
+            'total' => \App\Models\Client::count(),
+        ];
+    }
+}
+```
+
+### 4. TodaysTasksWidget
+**Purpose**: Displays today's tasks and priorities
+
+**Features**:
+- Today's task list
+- Priority indicators
+- Completion status
+- Quick actions
+
+**Implementation**:
+```php
+// app/Filament/Widgets/TodaysTasksWidget.php
+class TodaysTasksWidget extends Widget
+{
+    protected string $view = 'filament.widgets.todays-tasks-widget';
+    protected int|string|array $columnSpan = 'full';
+    protected static bool $isLazy = false;
+
+    public function getTodaysTasks(): array
+    {
+        return \App\Models\Task::whereDate('due_date', today())
+            ->whereIn('status', ['not_started', 'in_progress', 'deferred', 'waiting'])
+            ->with(['assignedTo', 'category'])
+            ->orderBy('priority', 'desc')
+            ->limit(10)
+            ->get()
+            ->toArray();
+    }
+}
+```
+
+### 5. QuickStatsWidget
+**Purpose**: Shows key performance indicators at a glance
+
+**Features**:
+- Total clients count
+- Open opportunities
+- Active tasks
+- Open tickets
+- Open deals
+
+**Implementation**:
+```php
+// app/Filament/Widgets/QuickStatsWidget.php
+class QuickStatsWidget extends StatsOverviewWidget
+{
+    protected function getStats(): array
+    {
+        return [
+            Stat::make(__('Total Clients'), Client::count())
+                ->description(__('Active clients in the system'))
+                ->descriptionIcon(Heroicon::Users)
+                ->color('success'),
+
+            Stat::make(__('Open Opportunities'), Opportunity::where('state', 'open')->count())
+                ->description(__('Opportunities in progress'))
+                ->descriptionIcon(Heroicon::CurrencyDollar)
+                ->color('warning'),
+
+            Stat::make(__('Active Tasks'), Task::whereIn('status', ['not_started', 'in_progress', 'deferred', 'waiting'])->count())
+                ->description(__('Tasks pending completion'))
+                ->descriptionIcon(Heroicon::ClipboardDocumentList)
+                ->color('info'),
+
+            Stat::make(__('Open Tickets'), Ticket::whereIn('status', ['open', 'in_progress', 'answered', 'waiting_client'])->count())
+                ->description(__('Tickets requiring attention'))
+                ->descriptionIcon(Heroicon::Lifebuoy)
+                ->color('danger'),
+
+            Stat::make(__('Open Deals'), Deal::where('status', 'open')->count())
+                ->description(__('Active deals in pipeline'))
+                ->descriptionIcon(Heroicon::CurrencyDollar)
+                ->color('purple'),
+        ];
+    }
+}
+```
+
+### 6. ReportsWidget
+**Purpose**: Provides quick access to all available reports
+
+**Features**:
+- Report categories with statistics
+- Direct navigation to report pages
+- Real-time data counts
+- Color-coded categories
+
+**Implementation**:
+```php
+// app/Filament/Widgets/ReportsWidget.php
+class ReportsWidget extends Widget
+{
+    protected string $view = 'filament.widgets.reports-widget';
+    protected int|string|array $columnSpan = 'full';
+    protected static bool $isLazy = false;
+
+    public function getReports(): array
+    {
+        return [
+            [
+                'title' => __('Client Reports'),
+                'description' => __('Analyze client data and performance'),
+                'icon' => 'heroicon-o-users',
+                'color' => 'success',
+                'url' => route('filament.admin.pages.client-reports'),
+                'stats' => [
+                    __('Total Clients') => \App\Models\Client::count(),
+                    __('Active Clients') => \App\Models\Client::where('is_active', true)->count(),
+                    __('New This Month') => \App\Models\Client::where('created_at', '>=', now()->startOfMonth())->count(),
+                    __('Recent Activity') => \App\Models\Client::where('updated_at', '>=', now()->subDays(7))->count(),
+                ],
+            ],
+            // ... more report categories
+        ];
+    }
+}
+```
+
+## Widget Development Guidelines
+
+### Creating New Widgets
+
+1. **Choose Base Class**:
+   - `Widget` - For custom widgets with custom views
+   - `StatsOverviewWidget` - For stat cards
+   - `ChartWidget` - For chart-based widgets
+
+2. **Implement Required Methods**:
+   ```php
+   class CustomWidget extends Widget
+   {
+       protected string $view = 'filament.widgets.custom-widget';
+       protected int|string|array $columnSpan = 'full';
+       protected static bool $isLazy = false;
+       
+       public function getData(): array
+       {
+           // Return widget data
+       }
+   }
+   ```
+
+3. **Create Blade Template**:
+   ```blade
+   {{-- resources/views/filament/widgets/custom-widget.blade.php --}}
+   <div class="bg-white rounded-lg shadow p-6">
+       <h3 class="text-lg font-semibold mb-4">{{ $this->getTitle() }}</h3>
+       <div class="space-y-4">
+           @foreach($this->getData() as $item)
+               <div class="flex justify-between items-center">
+                   <span>{{ $item['name'] }}</span>
+                   <span class="font-semibold">{{ $item['value'] }}</span>
+               </div>
+           @endforeach
+       </div>
+   </div>
+   ```
+
+### Performance Optimization
+
+#### Lazy Loading
+```php
+protected static bool $isLazy = true; // Load widget only when needed
+```
+
+#### Caching
+```php
+public function getData(): array
+{
+    return Cache::remember("widget-data-{$this->getClass()}", 300, function () {
+        // Expensive data fetching
+        return $this->fetchData();
+    });
+}
+```
+
+#### Query Optimization
+```php
+// Use eager loading to avoid N+1 queries
+$data = Model::with(['relation1', 'relation2'])->get();
+
+// Use select to limit columns
+$data = Model::select(['id', 'name', 'status'])->get();
+```
+
+### Best Practices
+
+1. **Keep widgets focused** on single responsibility
+2. **Use consistent naming** conventions
+3. **Provide loading states** for better UX
+4. **Handle empty states** gracefully
+5. **Make widgets interactive** where appropriate
+6. **Follow Filament v4 patterns** for consistency
+7. **Optimize database queries** to avoid performance issues
+8. **Use caching** for expensive operations
+9. **Implement proper error handling**
+10. **Test widgets** with different data scenarios
+
+### Troubleshooting
+
+#### Common Issues
+
+1. **Widget not displaying**: Check if widget is added to dashboard's `getWidgets()` array
+2. **Layout issues**: Verify column span configuration
+3. **Performance problems**: Enable lazy loading for expensive widgets
+4. **Data not updating**: Ensure proper Livewire reactivity
+5. **Memory issues**: Use chunking for large datasets
+
+#### Debugging Tips
+
+```php
+// Enable query logging
+DB::enableQueryLog();
+// ... widget operations
+$queries = DB::getQueryLog();
+
+// Monitor memory usage
+$memoryUsage = memory_get_usage(true);
+$peakMemory = memory_get_peak_usage(true);
+
+// Log widget data
+Log::info('Widget Data', $this->getData());
+```# Ali Fusion ERP Widgets Documentation
+
+## Widgets System Overview
+
+Ali Fusion ERP includes 6 main widgets that provide real-time insights and quick access to key functionality.
+
+## Available Widgets
+
+### 1. AlertsWidget
+**Purpose**: Shows critical alerts and notifications requiring immediate attention
+
+**Features**:
+- Overdue tasks count
+- Unresolved tickets
+- Expiring contracts
+- New leads
+- Pending approvals
+
+**Implementation**:
+```php
+// app/Filament/Widgets/AlertsWidget.php
+class AlertsWidget extends Widget
+{
+    protected string $view = 'filament.widgets.alerts-widget';
+    protected int|string|array $columnSpan = 'full';
+    protected static bool $isLazy = false;
+
+    public function getAlerts(): array
+    {
+        return [
+            [
+                'type' => 'urgent',
+                'title' => __('Overdue Tasks'),
+                'count' => \App\Models\Task::where('due_date', '<', now())
+                    ->whereIn('status', ['not_started', 'in_progress'])
+                    ->count(),
+                'icon' => 'heroicon-o-exclamation-triangle',
+                'color' => 'danger',
+                'url' => route('filament.admin.resources.tasks.index', ['tableFilters[status][value]' => 'overdue']),
+            ],
+            [
+                'type' => 'warning',
+                'title' => __('Unresolved Tickets'),
+                'count' => \App\Models\Ticket::whereIn('status', ['open', 'in_progress', 'answered', 'waiting_client'])
+                    ->where('created_at', '<', now()->subDays(3))
+                    ->count(),
+                'icon' => 'heroicon-o-lifebuoy',
+                'color' => 'warning',
+                'url' => route('filament.admin.resources.tickets.index', ['tableFilters[status][value]' => 'unresolved']),
+            ],
+            [
+                'type' => 'info',
+                'title' => __('Expiring Contracts'),
+                'count' => \App\Models\Contract::where('end_date', '<=', now()->addDays(30))
+                    ->where('end_date', '>', now())
+                    ->where('status', 'active')
+                    ->count(),
+                'icon' => 'heroicon-o-document-text',
+                'color' => 'info',
+                'url' => route('filament.admin.resources.contracts.index', ['tableFilters[status][value]' => 'expiring']),
+            ],
+            [
+                'type' => 'success',
+                'title' => __('New Leads'),
+                'count' => \App\Models\Client::where('created_at', '>=', now()->subDays(7))
+                    ->where('is_active', true)
+                    ->count(),
+                'icon' => 'heroicon-o-user-plus',
+                'color' => 'success',
+                'url' => route('filament.admin.resources.clients.index', ['tableFilters[created_at][value]' => 'recent']),
+            ],
+            [
+                'type' => 'secondary',
+                'title' => __('Pending Approvals'),
+                'count' => \App\Models\Contract::where('status', 'pending')->count() +
+                    \App\Models\Deal::where('status', 'pending')->count(),
+                'icon' => 'heroicon-o-clock',
+                'color' => 'secondary',
+                'url' => route('filament.admin.resources.contracts.index', ['tableFilters[status][value]' => 'pending']),
+            ],
+        ];
+    }
+}
+```
+
+### 2. SalesPipelineWidget
+**Purpose**: Visualizes sales pipeline with stages and values
+
+**Features**:
+- Pipeline stages (Lead → Qualified → Proposal → Negotiation → Closed Won)
+- Stage counts and values
+- Total pipeline value
+- Monthly won revenue
+- Top performers
+
+**Implementation**:
+```php
+// app/Filament/Widgets/SalesPipelineWidget.php
+class SalesPipelineWidget extends Widget
+{
+    protected string $view = 'filament.widgets.sales-pipeline-widget';
+    protected int|string|array $columnSpan = 'full';
+    protected static bool $isLazy = false;
+
+    public function getPipelineData(): array
+    {
+        return [
+            'stages' => [
+                'lead' => [
+                    'name' => __('Leads'),
+                    'count' => \App\Models\Client::where('is_active', true)->count(),
+                    'value' => 0, // Leads don't have value yet
+                    'color' => '#6b7280',
+                ],
+                'qualified' => [
+                    'name' => __('Qualified'),
+                    'count' => \App\Models\Deal::where('status', 'open')->count(),
+                    'value' => \App\Models\Deal::where('status', 'open')->sum('deal_value') ?? 0,
+                    'color' => '#3b82f6',
+                ],
+                'proposal' => [
+                    'name' => __('Proposal'),
+                    'count' => \App\Models\Deal::where('stage', 'proposal')->count(),
+                    'value' => \App\Models\Deal::where('stage', 'proposal')->sum('deal_value') ?? 0,
+                    'color' => '#f59e0b',
+                ],
+                'negotiation' => [
+                    'name' => __('Negotiation'),
+                    'count' => \App\Models\Deal::where('stage', 'negotiation')->count(),
+                    'value' => \App\Models\Deal::where('stage', 'negotiation')->sum('deal_value') ?? 0,
+                    'color' => '#8b5cf6',
+                ],
+                'closed_won' => [
+                    'name' => __('Closed Won'),
+                    'count' => \App\Models\Deal::where('status', 'won')->count(),
+                    'value' => \App\Models\Deal::where('status', 'won')->sum('deal_value') ?? 0,
+                    'color' => '#10b981',
+                ],
+            ],
+            'total_pipeline_value' => \App\Models\Deal::whereIn('status', ['open', 'won'])->whereIn('stage', ['proposal', 'negotiation', 'decision'])->sum('deal_value') ?? 0,
+            'won_this_month' => \App\Models\Deal::where('status', 'won')
+                ->where('updated_at', '>=', now()->startOfMonth())
+                ->sum('deal_value') ?? 0,
+            'target' => 100000, // You can make this dynamic
+        ];
+    }
+
+    public function getTopPerformers(): array
+    {
+        // This would need to be implemented based on your user/employee structure
+        return [
+            [
+                'name' => __('Sales Rep 1'),
+                'deals_won' => 5,
+                'revenue' => 25000,
+            ],
+            [
+                'name' => __('Sales Rep 2'),
+                'deals_won' => 3,
+                'revenue' => 18000,
+            ],
+        ];
+    }
+}
+```
+
+### 3. CustomerHealthWidget
+**Purpose**: Shows customer health metrics and engagement levels
+
+**Features**:
+- Customer health scores
+- Engagement levels
+- Risk indicators
+- Health trends
+
+**Implementation**:
+```php
+// app/Filament/Widgets/CustomerHealthWidget.php
+class CustomerHealthWidget extends Widget
+{
+    protected string $view = 'filament.widgets.customer-health-widget';
+    protected int|string|array $columnSpan = 'full';
+    protected static bool $isLazy = false;
+
+    public function getCustomerHealthData(): array
+    {
+        // Implementation for customer health metrics
+        return [
+            'healthy' => \App\Models\Client::where('health_score', '>=', 80)->count(),
+            'at_risk' => \App\Models\Client::whereBetween('health_score', [50, 79])->count(),
+            'critical' => \App\Models\Client::where('health_score', '<', 50)->count(),
+            'total' => \App\Models\Client::count(),
+        ];
+    }
+}
+```
+
+### 4. TodaysTasksWidget
+**Purpose**: Displays today's tasks and priorities
+
+**Features**:
+- Today's task list
+- Priority indicators
+- Completion status
+- Quick actions
+
+**Implementation**:
+```php
+// app/Filament/Widgets/TodaysTasksWidget.php
+class TodaysTasksWidget extends Widget
+{
+    protected string $view = 'filament.widgets.todays-tasks-widget';
+    protected int|string|array $columnSpan = 'full';
+    protected static bool $isLazy = false;
+
+    public function getTodaysTasks(): array
+    {
+        return \App\Models\Task::whereDate('due_date', today())
+            ->whereIn('status', ['not_started', 'in_progress', 'deferred', 'waiting'])
+            ->with(['assignedTo', 'category'])
+            ->orderBy('priority', 'desc')
+            ->limit(10)
+            ->get()
+            ->toArray();
+    }
+}
+```
+
+### 5. QuickStatsWidget
+**Purpose**: Shows key performance indicators at a glance
+
+**Features**:
+- Total clients count
+- Open opportunities
+- Active tasks
+- Open tickets
+- Open deals
+
+**Implementation**:
+```php
+// app/Filament/Widgets/QuickStatsWidget.php
+class QuickStatsWidget extends StatsOverviewWidget
+{
+    protected function getStats(): array
+    {
+        return [
+            Stat::make(__('Total Clients'), Client::count())
+                ->description(__('Active clients in the system'))
+                ->descriptionIcon(Heroicon::Users)
+                ->color('success'),
+
+            Stat::make(__('Open Opportunities'), Opportunity::where('state', 'open')->count())
+                ->description(__('Opportunities in progress'))
+                ->descriptionIcon(Heroicon::CurrencyDollar)
+                ->color('warning'),
+
+            Stat::make(__('Active Tasks'), Task::whereIn('status', ['not_started', 'in_progress', 'deferred', 'waiting'])->count())
+                ->description(__('Tasks pending completion'))
+                ->descriptionIcon(Heroicon::ClipboardDocumentList)
+                ->color('info'),
+
+            Stat::make(__('Open Tickets'), Ticket::whereIn('status', ['open', 'in_progress', 'answered', 'waiting_client'])->count())
+                ->description(__('Tickets requiring attention'))
+                ->descriptionIcon(Heroicon::Lifebuoy)
+                ->color('danger'),
+
+            Stat::make(__('Open Deals'), Deal::where('status', 'open')->count())
+                ->description(__('Active deals in pipeline'))
+                ->descriptionIcon(Heroicon::CurrencyDollar)
+                ->color('purple'),
+        ];
+    }
+}
+```
+
+### 6. ReportsWidget
+**Purpose**: Provides quick access to all available reports
+
+**Features**:
+- Report categories with statistics
+- Direct navigation to report pages
+- Real-time data counts
+- Color-coded categories
+
+**Implementation**:
+```php
+// app/Filament/Widgets/ReportsWidget.php
+class ReportsWidget extends Widget
+{
+    protected string $view = 'filament.widgets.reports-widget';
+    protected int|string|array $columnSpan = 'full';
+    protected static bool $isLazy = false;
+
+    public function getReports(): array
+    {
+        return [
+            [
+                'title' => __('Client Reports'),
+                'description' => __('Analyze client data and performance'),
+                'icon' => 'heroicon-o-users',
+                'color' => 'success',
+                'url' => route('filament.admin.pages.client-reports'),
+                'stats' => [
+                    __('Total Clients') => \App\Models\Client::count(),
+                    __('Active Clients') => \App\Models\Client::where('is_active', true)->count(),
+                    __('New This Month') => \App\Models\Client::where('created_at', '>=', now()->startOfMonth())->count(),
+                    __('Recent Activity') => \App\Models\Client::where('updated_at', '>=', now()->subDays(7))->count(),
+                ],
+            ],
+            // ... more report categories
+        ];
+    }
+}
+```
+
+## Widget Development Guidelines
+
+### Creating New Widgets
+
+1. **Choose Base Class**:
+   - `Widget` - For custom widgets with custom views
+   - `StatsOverviewWidget` - For stat cards
+   - `ChartWidget` - For chart-based widgets
+
+2. **Implement Required Methods**:
+   ```php
+   class CustomWidget extends Widget
+   {
+       protected string $view = 'filament.widgets.custom-widget';
+       protected int|string|array $columnSpan = 'full';
+       protected static bool $isLazy = false;
+       
+       public function getData(): array
+       {
+           // Return widget data
+       }
+   }
+   ```
+
+3. **Create Blade Template**:
+   ```blade
+   {{-- resources/views/filament/widgets/custom-widget.blade.php --}}
+   <div class="bg-white rounded-lg shadow p-6">
+       <h3 class="text-lg font-semibold mb-4">{{ $this->getTitle() }}</h3>
+       <div class="space-y-4">
+           @foreach($this->getData() as $item)
+               <div class="flex justify-between items-center">
+                   <span>{{ $item['name'] }}</span>
+                   <span class="font-semibold">{{ $item['value'] }}</span>
+               </div>
+           @endforeach
+       </div>
+   </div>
+   ```
+
+### Performance Optimization
+
+#### Lazy Loading
+```php
+protected static bool $isLazy = true; // Load widget only when needed
+```
+
+#### Caching
+```php
+public function getData(): array
+{
+    return Cache::remember("widget-data-{$this->getClass()}", 300, function () {
+        // Expensive data fetching
+        return $this->fetchData();
+    });
+}
+```
+
+#### Query Optimization
+```php
+// Use eager loading to avoid N+1 queries
+$data = Model::with(['relation1', 'relation2'])->get();
+
+// Use select to limit columns
+$data = Model::select(['id', 'name', 'status'])->get();
+```
+
+### Best Practices
+
+1. **Keep widgets focused** on single responsibility
+2. **Use consistent naming** conventions
+3. **Provide loading states** for better UX
+4. **Handle empty states** gracefully
+5. **Make widgets interactive** where appropriate
+6. **Follow Filament v4 patterns** for consistency
+7. **Optimize database queries** to avoid performance issues
+8. **Use caching** for expensive operations
+9. **Implement proper error handling**
+10. **Test widgets** with different data scenarios
+
+### Troubleshooting
+
+#### Common Issues
+
+1. **Widget not displaying**: Check if widget is added to dashboard's `getWidgets()` array
+2. **Layout issues**: Verify column span configuration
+3. **Performance problems**: Enable lazy loading for expensive widgets
+4. **Data not updating**: Ensure proper Livewire reactivity
+5. **Memory issues**: Use chunking for large datasets
+
+#### Debugging Tips
+
+```php
+// Enable query logging
+DB::enableQueryLog();
+// ... widget operations
+$queries = DB::getQueryLog();
+
+// Monitor memory usage
+$memoryUsage = memory_get_usage(true);
+$peakMemory = memory_get_peak_usage(true);
+
+// Log widget data
+Log::info('Widget Data', $this->getData());
+```

@@ -1,0 +1,1377 @@
+---
+description: when exporting to pdf across the project
+alwaysApply: false
+---
+# Ali Fusion ERP PDF Export Documentation
+
+## PDF Export Overview
+
+Ali Fusion ERP provides comprehensive PDF export functionality with RTL support for Arabic/Kurdish text, professional styling, and optimized performance for large datasets.
+
+## PDF Export Features
+
+### RTL Support for Arabic/Kurdish
+```php
+// Use LaravelPdf for proper RTL support
+use niklasravnsborg\LaravelPdf\Facades\Pdf as PDF;
+
+private function exportPdf(string $type, array $data): Response
+{
+    $filename = "{$type}-report-" . now()->format('Y-m-d') . '.pdf';
+    
+    $pdfData = array_merge($data, [
+        'is_pdf' => true,
+        'title' => __(':type Report', ['type' => ucfirst($type)]),
+        'type' => $type,
+    ]);
+    
+    $pdf = PDF::loadView('reports.generic-pdf', $pdfData, [], [
+        'format' => 'A4-P',
+        'mode' => 'utf-8',
+    ]);
+    
+    return $pdf->download($filename);
+}
+```
+
+### PDF Configuration
+```php
+// PDF config for Arabic text
+$pdf = PDF::loadView('view-name', $data, [], [
+    'format' => 'A4-P',
+    'mode' => 'utf-8',
+]);
+```
+
+### Text Sanitization
+```php
+// Sanitize text for PDF
+$sanitizedText = mb_convert_encoding($text, 'UTF-8', 'auto');
+$displayText = e($sanitizedText);
+```
+
+## PDF Export Implementation
+
+### Export Controller Method
+```php
+// app/Http/Controllers/ReportsController.php
+private function exportPdf(string $type, array $data): Response
+{
+    $filename = "{$type}-report-" . now()->format('Y-m-d') . '.pdf';
+    
+    $pdfData = array_merge($data, [
+        'is_pdf' => true,
+        'title' => __(':type Report', ['type' => ucfirst($type)]),
+        'type' => $type,
+        'generated_at' => now()->format('Y-m-d H:i:s'),
+        'generated_by' => Auth::user()->name ?? __('System'),
+    ]);
+    
+    $pdf = PDF::loadView('reports.generic-pdf', $pdfData, [], [
+        'format' => 'A4-P',
+        'mode' => 'utf-8',
+    ]);
+    
+    return $pdf->download($filename);
+}
+```
+
+### All Reports PDF Export
+```php
+private function exportAllPdf(array $allData): Response
+{
+    $filename = "all-reports-" . now()->format('Y-m-d') . '.pdf';
+    
+    $pdfData = [
+        'is_pdf' => true,
+        'title' => __('All Reports'),
+        'reports' => $allData,
+        'generated_at' => now()->format('Y-m-d H:i:s'),
+        'generated_by' => Auth::user()->name ?? __('System'),
+    ];
+    
+    $pdf = PDF::loadView('reports.all-reports-pdf', $pdfData, [], [
+        'format' => 'A4-P',
+        'mode' => 'utf-8',
+    ]);
+    
+    return $pdf->download($filename);
+}
+```
+
+## PDF Template Structure
+
+### Generic PDF Template
+```blade
+{{-- resources/views/reports/generic-pdf.blade.php --}}
+<!DOCTYPE html>
+<html lang="{{ app()->getLocale() }}" dir="{{ app()->getLocale() === 'ar' ? 'rtl' : 'ltr' }}">
+<head>
+    <meta charset="UTF-8">
+    <title>{{ $title }}</title>
+    <style>
+        body { 
+            font-family: 'Tajawal', Arial, sans-serif; 
+            margin: 0;
+            padding: 20px;
+            font-size: 12px;
+            line-height: 1.4;
+        }
+        
+        .rtl { 
+            direction: rtl; 
+            text-align: right; 
+        }
+        
+        .ltr { 
+            direction: ltr; 
+            text-align: left; 
+        }
+        
+        .header { 
+            background-color: #f3f4f6; 
+            padding: 20px; 
+            margin-bottom: 20px;
+            border-radius: 8px;
+        }
+        
+        .header h1 {
+            margin: 0 0 10px 0;
+            font-size: 24px;
+            color: #1f2937;
+        }
+        
+        .header p {
+            margin: 0;
+            color: #6b7280;
+            font-size: 14px;
+        }
+        
+        .table { 
+            width: 100%; 
+            border-collapse: collapse; 
+            margin-bottom: 20px;
+        }
+        
+        .table th, .table td { 
+            border: 1px solid #d1d5db; 
+            padding: 8px; 
+            text-align: {{ app()->getLocale() === 'ar' ? 'right' : 'left' }};
+        }
+        
+        .table th { 
+            background-color: #e5e7eb; 
+            font-weight: bold;
+            font-size: 14px;
+        }
+        
+        .table td {
+            font-size: 12px;
+        }
+        
+        .footer {
+            position: fixed;
+            bottom: 20px;
+            left: 20px;
+            right: 20px;
+            text-align: center;
+            font-size: 10px;
+            color: #6b7280;
+            border-top: 1px solid #e5e7eb;
+            padding-top: 10px;
+        }
+        
+        .page-break {
+            page-break-before: always;
+        }
+        
+        .no-break {
+            page-break-inside: avoid;
+        }
+        
+        .summary-stats {
+            display: flex;
+            justify-content: space-around;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+        
+        .stat-item {
+            text-align: center;
+            padding: 15px;
+            background-color: #f9fafb;
+            border-radius: 8px;
+            margin: 5px;
+            min-width: 120px;
+        }
+        
+        .stat-value {
+            font-size: 18px;
+            font-weight: bold;
+            color: #1f2937;
+        }
+        
+        .stat-label {
+            font-size: 12px;
+            color: #6b7280;
+            margin-top: 5px;
+        }
+    </style>
+</head>
+<body class="{{ app()->getLocale() === 'ar' ? 'rtl' : 'ltr' }}">
+    <div class="header">
+        <h1>{{ $title }}</h1>
+        <p>{{ __('Generated on') }}: {{ $generated_at ?? now()->format('Y-m-d H:i:s') }}</p>
+        <p>{{ __('Generated by') }}: {{ $generated_by ?? Auth::user()->name ?? __('System') }}</p>
+    </div>
+    
+    @if(isset($summary_stats))
+    <div class="summary-stats">
+        @foreach($summary_stats as $stat)
+        <div class="stat-item">
+            <div class="stat-value">{{ $stat['value'] }}</div>
+            <div class="stat-label">{{ $stat['label'] }}</div>
+        </div>
+        @endforeach
+    </div>
+    @endif
+    
+    <div class="content">
+        @if($is_pdf)
+            {{-- PDF-specific content --}}
+            @include('reports.partials.pdf-table', ['data' => $records ?? []])
+        @else
+            {{-- Regular content --}}
+            @include('reports.partials.data-table', ['data' => $records ?? []])
+        @endif
+    </div>
+    
+    <div class="footer">
+        {{ __('Page') }} <span class="page-number"></span> - {{ __('Generated by') }} {{ config('app.name') }}
+    </div>
+</body>
+</html>
+```
+
+### PDF Table Partial
+```blade
+{{-- resources/views/reports/partials/pdf-table.blade.php --}}
+@if(!empty($data))
+<div class="no-break">
+    <table class="table">
+        <thead>
+            <tr>
+                <th>{{ __('ID') }}</th>
+                <th>{{ __('Name') }}</th>
+                <th>{{ __('Email') }}</th>
+                <th>{{ __('Status') }}</th>
+                <th>{{ __('Created At') }}</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach($data as $record)
+            <tr>
+                <td>{{ $record->id }}</td>
+                <td>{{ e($record->name) }}</td>
+                <td>{{ e($record->email) }}</td>
+                <td>
+                    <span class="status-badge status-{{ $record->status }}">
+                        {{ __(ucfirst($record->status)) }}
+                    </span>
+                </td>
+                <td>{{ $record->created_at->format('Y-m-d H:i:s') }}</td>
+            </tr>
+            @endforeach
+        </tbody>
+    </table>
+</div>
+@else
+<div class="no-data">
+    <p>{{ __('No data available for the selected criteria.') }}</p>
+</div>
+@endif
+```
+
+### All Reports PDF Template
+```blade
+{{-- resources/views/reports/all-reports-pdf.blade.php --}}
+<!DOCTYPE html>
+<html lang="{{ app()->getLocale() }}" dir="{{ app()->getLocale() === 'ar' ? 'rtl' : 'ltr' }}">
+<head>
+    <meta charset="UTF-8">
+    <title>{{ $title }}</title>
+    <style>
+        /* Same styles as generic template */
+        body { 
+            font-family: 'Tajawal', Arial, sans-serif; 
+            margin: 0;
+            padding: 20px;
+            font-size: 12px;
+            line-height: 1.4;
+        }
+        
+        .report-section {
+            margin-bottom: 30px;
+            page-break-inside: avoid;
+        }
+        
+        .report-title {
+            font-size: 18px;
+            font-weight: bold;
+            color: #1f2937;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #e5e7eb;
+        }
+        
+        .report-summary {
+            background-color: #f9fafb;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 15px;
+        }
+    </style>
+</head>
+<body class="{{ app()->getLocale() === 'ar' ? 'rtl' : 'ltr' }}">
+    <div class="header">
+        <h1>{{ $title }}</h1>
+        <p>{{ __('Generated on') }}: {{ $generated_at }}</p>
+        <p>{{ __('Generated by') }}: {{ $generated_by }}</p>
+    </div>
+    
+    @foreach($reports as $type => $reportData)
+    <div class="report-section">
+        <div class="report-title">{{ __(ucfirst($type)) }} {{ __('Report') }}</div>
+        
+        @if(isset($reportData['summary']))
+        <div class="report-summary">
+            @foreach($reportData['summary'] as $key => $value)
+            <p><strong>{{ __($key) }}:</strong> {{ $value }}</p>
+            @endforeach
+        </div>
+        @endif
+        
+        @if(!empty($reportData['records']))
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>{{ __('ID') }}</th>
+                    <th>{{ __('Name') }}</th>
+                    <th>{{ __('Status') }}</th>
+                    <th>{{ __('Created At') }}</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach($reportData['records'] as $record)
+                <tr>
+                    <td>{{ $record->id }}</td>
+                    <td>{{ e($record->name) }}</td>
+                    <td>{{ __(ucfirst($record->status)) }}</td>
+                    <td>{{ $record->created_at->format('Y-m-d') }}</td>
+                </tr>
+                @endforeach
+            </tbody>
+        </table>
+        @else
+        <p>{{ __('No data available for this report.') }}</p>
+        @endif
+    </div>
+    
+    @if(!$loop->last)
+    <div class="page-break"></div>
+    @endif
+    @endforeach
+    
+    <div class="footer">
+        {{ __('Page') }} <span class="page-number"></span> - {{ __('Generated by') }} {{ config('app.name') }}
+    </div>
+</body>
+</html>
+```
+
+## PDF Styling Guidelines
+
+### Font Configuration
+```css
+/* Use Tajawal font for Arabic text */
+body { 
+    font-family: 'Tajawal', Arial, sans-serif; 
+}
+
+/* RTL support */
+.rtl { 
+    direction: rtl; 
+    text-align: right; 
+}
+
+.ltr { 
+    direction: ltr; 
+    text-align: left; 
+}
+```
+
+### Table Styling
+```css
+.table { 
+    width: 100%; 
+    border-collapse: collapse; 
+    margin-bottom: 20px;
+}
+
+.table th, .table td { 
+    border: 1px solid #d1d5db; 
+    padding: 8px; 
+    text-align: {{ app()->getLocale() === 'ar' ? 'right' : 'left' }};
+}
+
+.table th { 
+    background-color: #e5e7eb; 
+    font-weight: bold;
+    font-size: 14px;
+}
+```
+
+### Page Break Control
+```css
+.page-break {
+    page-break-before: always;
+}
+
+.no-break {
+    page-break-inside: avoid;
+}
+```
+
+## Multi-Language Support
+
+### Language Detection
+```php
+// Detect user language from multiple sources
+private function getUserLanguage(): string
+{
+    return session('locale') 
+        ?? request()->header('Accept-Language')
+        ?? request()->cookie('locale')
+        ?? app()->getLocale();
+}
+```
+
+### RTL Layout Support
+```php
+// RTL layout detection
+private function isRtlLanguage(string $locale): bool
+{
+    return in_array($locale, ['ar', 'ku']);
+}
+
+// Apply RTL styles
+$rtlClass = $this->isRtlLanguage($locale) ? 'rtl' : 'ltr';
+```
+
+### Translation in PDFs
+```php
+// Translate text for PDFs
+private function translateForPdf(string $key, string $locale = null): string
+{
+    $locale = $locale ?? $this->getUserLanguage();
+    $original = app()->getLocale();
+    
+    app()->setLocale($locale);
+    $translation = __($key);
+    app()->setLocale($original);
+    
+    return $translation;
+}
+```
+
+## Performance Optimization
+
+### Large Dataset Handling
+```php
+// Use chunking for very large datasets
+private function exportPdf(string $type, array $data): Response
+{
+    // Set memory limits
+    ini_set('memory_limit', '2048M');
+    ini_set('max_execution_time', 600);
+    
+    // Process data in chunks if needed
+    if (count($data['records']) > 1000) {
+        $data['records'] = $this->chunkData($data['records'], 1000);
+    }
+    
+    return $this->generatePdf($type, $data);
+}
+```
+
+### Memory Management
+```php
+// Set appropriate memory limits
+ini_set('memory_limit', '2048M');
+ini_set('max_execution_time', 600);
+
+// Use streaming for very large PDFs
+return response()->streamDownload(function () use ($data) {
+    $pdf = PDF::loadView('reports.generic-pdf', $data);
+    $pdf->stream();
+}, $filename);
+```
+
+### Caching
+```php
+// Cache expensive data preparation
+public function getPdfData(): array
+{
+    $cacheKey = "pdf-data-{$this->type}-" . md5(serialize($this->filters));
+    
+    return Cache::remember($cacheKey, 300, function () {
+        return $this->preparePdfData();
+    });
+}
+```
+
+## Best Practices
+
+### 1. Error Handling
+```php
+try {
+    $pdf = PDF::loadView('reports.generic-pdf', $data);
+    return $pdf->download($filename);
+} catch (\Exception $e) {
+    Log::error('PDF Export Failed', [
+        'error' => $e->getMessage(),
+        'trace' => $e->getTraceAsString(),
+    ]);
+    
+    return redirect()->back()->with('error', __('PDF export failed. Please try again.'));
+}
+```
+
+### 2. Data Validation
+```php
+// Validate data before PDF generation
+if (empty($data['records'])) {
+    return redirect()->back()->with('error', __('No data found for PDF export.'));
+}
+
+// Check data size
+if (count($data['records']) > 5000) {
+    return redirect()->back()->with('warning', __('Dataset too large for PDF. Please apply filters.'));
+}
+```
+
+### 3. File Naming
+```php
+// Generate descriptive filenames
+$filename = "{$type}-report-" . now()->format('Y-m-d-H-i-s') . '.pdf';
+
+// Include user context
+$filename = "{$type}-report-{$user->name}-" . now()->format('Y-m-d') . '.pdf';
+```
+
+### 4. Security
+```php
+// Sanitize all output data
+$sanitizedData = array_map(function($record) {
+    return [
+        'id' => $record->id,
+        'name' => e($record->name),
+        'email' => e($record->email),
+        'status' => e($record->status),
+    ];
+}, $data['records']);
+```
+
+## Troubleshooting
+
+### Common Issues
+
+1. **Arabic Text Not Displaying**
+   ```php
+   // Solution: Use proper font and encoding
+   $pdf = PDF::loadView('view', $data, [], [
+       'format' => 'A4-P',
+       'mode' => 'utf-8',
+   ]);
+   ```
+
+2. **RTL Layout Issues**
+   ```css
+   /* Solution: Use proper RTL CSS */
+   .rtl { 
+       direction: rtl; 
+       text-align: right; 
+   }
+   ```
+
+3. **Memory Exhaustion**
+   ```php
+   // Solution: Increase memory limit and use chunking
+   ini_set('memory_limit', '2048M');
+   $data = $this->chunkData($data, 1000);
+   ```
+
+4. **Page Break Issues**
+   ```css
+   /* Solution: Use proper page break CSS */
+   .page-break {
+       page-break-before: always;
+   }
+   
+   .no-break {
+       page-break-inside: avoid;
+   }
+   ```
+
+### Performance Monitoring
+
+```php
+// Monitor memory usage
+$memoryUsage = memory_get_usage(true);
+$peakMemory = memory_get_peak_usage(true);
+
+// Monitor execution time
+$startTime = microtime(true);
+// ... PDF operations
+$executionTime = microtime(true) - $startTime;
+
+// Log performance metrics
+Log::info('PDF Export Performance', [
+    'memory_usage' => $memoryUsage,
+    'peak_memory' => $peakMemory,
+    'execution_time' => $executionTime,
+    'record_count' => count($records),
+]);
+```
+
+## MPDF Temporary Directory Fix
+
+### Problem
+Production servers may encounter the error:
+```
+Mpdf\MpdfException: Temporary files directory "/var/www/alifusionerp/../temp//mpdf" is not writable
+```
+
+### Root Cause
+The PDF configuration was using `base_path('../temp/')` which resolves to a directory outside the Laravel project that either doesn't exist or lacks proper write permissions.
+
+### Solution
+
+#### 1. Update PDF Configuration
+```php
+// config/pdf.php
+return [
+    'mode' => 'utf-8',
+    'format' => 'A4',
+    'tempDir' => storage_path('app/temp/mpdf'), // Use Laravel storage
+    'font_path' => base_path('resources/fonts/'),
+    // ... rest of config
+];
+```
+
+#### 2. Create Directory Safety Method
+```php
+// app/Http/Controllers/ReportsController.php
+private function ensureTempDirectoryExists(): void
+{
+    $tempDir = storage_path('app/temp/mpdf');
+    
+    if (!is_dir($tempDir)) {
+        mkdir($tempDir, 0755, true);
+    }
+    
+    if (!is_writable($tempDir)) {
+        chmod($tempDir, 0755);
+    }
+}
+```
+
+#### 3. Update PDF Generation Methods
+```php
+private function exportPdf(string $type, array $data): Response
+{
+    // Ensure temp directory exists
+    $this->ensureTempDirectoryExists();
+    
+    $filename = "{$type}-report-" . now()->format('Y-m-d') . '.pdf';
+    
+    $pdfData = array_merge($data, [
+        'is_pdf' => true,
+        'title' => __(':type Report', ['type' => ucfirst($type)]),
+        'type' => $type,
+    ]);
+    
+    $pdf = PDF::loadView('reports.generic-pdf', $pdfData, [], [
+        'format' => 'A4-P',
+        'mode' => 'utf-8',
+    ]);
+    
+    return $pdf->download($filename);
+}
+
+private function exportAllPdf(array $allData): Response
+{
+    // Ensure temp directory exists
+    $this->ensureTempDirectoryExists();
+    
+    // ... rest of PDF generation code
+}
+```
+
+#### 4. Create Directory (One-time Setup)
+```bash
+# Create the temp directory
+mkdir -p storage/app/temp/mpdf
+
+# Set proper permissions (Linux/Unix)
+chmod 755 storage/app/temp/mpdf
+```
+
+### Benefits
+- **Reliable Path**: Uses Laravel's `storage_path()` which is always within the project
+- **Automatic Creation**: Directory is created automatically if it doesn't exist
+- **Permission Handling**: Automatically sets proper permissions if needed
+- **Production Ready**: Works consistently across different server environments
+- **Backward Compatible**: No breaking changes to existing functionality
+
+# Ali Fusion ERP PDF Export Documentation
+
+## PDF Export Overview
+
+Ali Fusion ERP provides comprehensive PDF export functionality with RTL support for Arabic/Kurdish text, professional styling, and optimized performance for large datasets.
+
+## PDF Export Features
+
+### RTL Support for Arabic/Kurdish
+```php
+// Use LaravelPdf for proper RTL support
+use niklasravnsborg\LaravelPdf\Facades\Pdf as PDF;
+
+private function exportPdf(string $type, array $data): Response
+{
+    $filename = "{$type}-report-" . now()->format('Y-m-d') . '.pdf';
+    
+    $pdfData = array_merge($data, [
+        'is_pdf' => true,
+        'title' => __(':type Report', ['type' => ucfirst($type)]),
+        'type' => $type,
+    ]);
+    
+    $pdf = PDF::loadView('reports.generic-pdf', $pdfData, [], [
+        'format' => 'A4-P',
+        'mode' => 'utf-8',
+    ]);
+    
+    return $pdf->download($filename);
+}
+```
+
+### PDF Configuration
+```php
+// PDF config for Arabic text
+$pdf = PDF::loadView('view-name', $data, [], [
+    'format' => 'A4-P',
+    'mode' => 'utf-8',
+]);
+```
+
+### Text Sanitization
+```php
+// Sanitize text for PDF
+$sanitizedText = mb_convert_encoding($text, 'UTF-8', 'auto');
+$displayText = e($sanitizedText);
+```
+
+## PDF Export Implementation
+
+### Export Controller Method
+```php
+// app/Http/Controllers/ReportsController.php
+private function exportPdf(string $type, array $data): Response
+{
+    $filename = "{$type}-report-" . now()->format('Y-m-d') . '.pdf';
+    
+    $pdfData = array_merge($data, [
+        'is_pdf' => true,
+        'title' => __(':type Report', ['type' => ucfirst($type)]),
+        'type' => $type,
+        'generated_at' => now()->format('Y-m-d H:i:s'),
+        'generated_by' => Auth::user()->name ?? __('System'),
+    ]);
+    
+    $pdf = PDF::loadView('reports.generic-pdf', $pdfData, [], [
+        'format' => 'A4-P',
+        'mode' => 'utf-8',
+    ]);
+    
+    return $pdf->download($filename);
+}
+```
+
+### All Reports PDF Export
+```php
+private function exportAllPdf(array $allData): Response
+{
+    $filename = "all-reports-" . now()->format('Y-m-d') . '.pdf';
+    
+    $pdfData = [
+        'is_pdf' => true,
+        'title' => __('All Reports'),
+        'reports' => $allData,
+        'generated_at' => now()->format('Y-m-d H:i:s'),
+        'generated_by' => Auth::user()->name ?? __('System'),
+    ];
+    
+    $pdf = PDF::loadView('reports.all-reports-pdf', $pdfData, [], [
+        'format' => 'A4-P',
+        'mode' => 'utf-8',
+    ]);
+    
+    return $pdf->download($filename);
+}
+```
+
+## PDF Template Structure
+
+### Generic PDF Template
+```blade
+{{-- resources/views/reports/generic-pdf.blade.php --}}
+<!DOCTYPE html>
+<html lang="{{ app()->getLocale() }}" dir="{{ app()->getLocale() === 'ar' ? 'rtl' : 'ltr' }}">
+<head>
+    <meta charset="UTF-8">
+    <title>{{ $title }}</title>
+    <style>
+        body { 
+            font-family: 'Tajawal', Arial, sans-serif; 
+            margin: 0;
+            padding: 20px;
+            font-size: 12px;
+            line-height: 1.4;
+        }
+        
+        .rtl { 
+            direction: rtl; 
+            text-align: right; 
+        }
+        
+        .ltr { 
+            direction: ltr; 
+            text-align: left; 
+        }
+        
+        .header { 
+            background-color: #f3f4f6; 
+            padding: 20px; 
+            margin-bottom: 20px;
+            border-radius: 8px;
+        }
+        
+        .header h1 {
+            margin: 0 0 10px 0;
+            font-size: 24px;
+            color: #1f2937;
+        }
+        
+        .header p {
+            margin: 0;
+            color: #6b7280;
+            font-size: 14px;
+        }
+        
+        .table { 
+            width: 100%; 
+            border-collapse: collapse; 
+            margin-bottom: 20px;
+        }
+        
+        .table th, .table td { 
+            border: 1px solid #d1d5db; 
+            padding: 8px; 
+            text-align: {{ app()->getLocale() === 'ar' ? 'right' : 'left' }};
+        }
+        
+        .table th { 
+            background-color: #e5e7eb; 
+            font-weight: bold;
+            font-size: 14px;
+        }
+        
+        .table td {
+            font-size: 12px;
+        }
+        
+        .footer {
+            position: fixed;
+            bottom: 20px;
+            left: 20px;
+            right: 20px;
+            text-align: center;
+            font-size: 10px;
+            color: #6b7280;
+            border-top: 1px solid #e5e7eb;
+            padding-top: 10px;
+        }
+        
+        .page-break {
+            page-break-before: always;
+        }
+        
+        .no-break {
+            page-break-inside: avoid;
+        }
+        
+        .summary-stats {
+            display: flex;
+            justify-content: space-around;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+        
+        .stat-item {
+            text-align: center;
+            padding: 15px;
+            background-color: #f9fafb;
+            border-radius: 8px;
+            margin: 5px;
+            min-width: 120px;
+        }
+        
+        .stat-value {
+            font-size: 18px;
+            font-weight: bold;
+            color: #1f2937;
+        }
+        
+        .stat-label {
+            font-size: 12px;
+            color: #6b7280;
+            margin-top: 5px;
+        }
+    </style>
+</head>
+<body class="{{ app()->getLocale() === 'ar' ? 'rtl' : 'ltr' }}">
+    <div class="header">
+        <h1>{{ $title }}</h1>
+        <p>{{ __('Generated on') }}: {{ $generated_at ?? now()->format('Y-m-d H:i:s') }}</p>
+        <p>{{ __('Generated by') }}: {{ $generated_by ?? Auth::user()->name ?? __('System') }}</p>
+    </div>
+    
+    @if(isset($summary_stats))
+    <div class="summary-stats">
+        @foreach($summary_stats as $stat)
+        <div class="stat-item">
+            <div class="stat-value">{{ $stat['value'] }}</div>
+            <div class="stat-label">{{ $stat['label'] }}</div>
+        </div>
+        @endforeach
+    </div>
+    @endif
+    
+    <div class="content">
+        @if($is_pdf)
+            {{-- PDF-specific content --}}
+            @include('reports.partials.pdf-table', ['data' => $records ?? []])
+        @else
+            {{-- Regular content --}}
+            @include('reports.partials.data-table', ['data' => $records ?? []])
+        @endif
+    </div>
+    
+    <div class="footer">
+        {{ __('Page') }} <span class="page-number"></span> - {{ __('Generated by') }} {{ config('app.name') }}
+    </div>
+</body>
+</html>
+```
+
+### PDF Table Partial
+```blade
+{{-- resources/views/reports/partials/pdf-table.blade.php --}}
+@if(!empty($data))
+<div class="no-break">
+    <table class="table">
+        <thead>
+            <tr>
+                <th>{{ __('ID') }}</th>
+                <th>{{ __('Name') }}</th>
+                <th>{{ __('Email') }}</th>
+                <th>{{ __('Status') }}</th>
+                <th>{{ __('Created At') }}</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach($data as $record)
+            <tr>
+                <td>{{ $record->id }}</td>
+                <td>{{ e($record->name) }}</td>
+                <td>{{ e($record->email) }}</td>
+                <td>
+                    <span class="status-badge status-{{ $record->status }}">
+                        {{ __(ucfirst($record->status)) }}
+                    </span>
+                </td>
+                <td>{{ $record->created_at->format('Y-m-d H:i:s') }}</td>
+            </tr>
+            @endforeach
+        </tbody>
+    </table>
+</div>
+@else
+<div class="no-data">
+    <p>{{ __('No data available for the selected criteria.') }}</p>
+</div>
+@endif
+```
+
+### All Reports PDF Template
+```blade
+{{-- resources/views/reports/all-reports-pdf.blade.php --}}
+<!DOCTYPE html>
+<html lang="{{ app()->getLocale() }}" dir="{{ app()->getLocale() === 'ar' ? 'rtl' : 'ltr' }}">
+<head>
+    <meta charset="UTF-8">
+    <title>{{ $title }}</title>
+    <style>
+        /* Same styles as generic template */
+        body { 
+            font-family: 'Tajawal', Arial, sans-serif; 
+            margin: 0;
+            padding: 20px;
+            font-size: 12px;
+            line-height: 1.4;
+        }
+        
+        .report-section {
+            margin-bottom: 30px;
+            page-break-inside: avoid;
+        }
+        
+        .report-title {
+            font-size: 18px;
+            font-weight: bold;
+            color: #1f2937;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #e5e7eb;
+        }
+        
+        .report-summary {
+            background-color: #f9fafb;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 15px;
+        }
+    </style>
+</head>
+<body class="{{ app()->getLocale() === 'ar' ? 'rtl' : 'ltr' }}">
+    <div class="header">
+        <h1>{{ $title }}</h1>
+        <p>{{ __('Generated on') }}: {{ $generated_at }}</p>
+        <p>{{ __('Generated by') }}: {{ $generated_by }}</p>
+    </div>
+    
+    @foreach($reports as $type => $reportData)
+    <div class="report-section">
+        <div class="report-title">{{ __(ucfirst($type)) }} {{ __('Report') }}</div>
+        
+        @if(isset($reportData['summary']))
+        <div class="report-summary">
+            @foreach($reportData['summary'] as $key => $value)
+            <p><strong>{{ __($key) }}:</strong> {{ $value }}</p>
+            @endforeach
+        </div>
+        @endif
+        
+        @if(!empty($reportData['records']))
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>{{ __('ID') }}</th>
+                    <th>{{ __('Name') }}</th>
+                    <th>{{ __('Status') }}</th>
+                    <th>{{ __('Created At') }}</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach($reportData['records'] as $record)
+                <tr>
+                    <td>{{ $record->id }}</td>
+                    <td>{{ e($record->name) }}</td>
+                    <td>{{ __(ucfirst($record->status)) }}</td>
+                    <td>{{ $record->created_at->format('Y-m-d') }}</td>
+                </tr>
+                @endforeach
+            </tbody>
+        </table>
+        @else
+        <p>{{ __('No data available for this report.') }}</p>
+        @endif
+    </div>
+    
+    @if(!$loop->last)
+    <div class="page-break"></div>
+    @endif
+    @endforeach
+    
+    <div class="footer">
+        {{ __('Page') }} <span class="page-number"></span> - {{ __('Generated by') }} {{ config('app.name') }}
+    </div>
+</body>
+</html>
+```
+
+## PDF Styling Guidelines
+
+### Font Configuration
+```css
+/* Use Tajawal font for Arabic text */
+body { 
+    font-family: 'Tajawal', Arial, sans-serif; 
+}
+
+/* RTL support */
+.rtl { 
+    direction: rtl; 
+    text-align: right; 
+}
+
+.ltr { 
+    direction: ltr; 
+    text-align: left; 
+}
+```
+
+### Table Styling
+```css
+.table { 
+    width: 100%; 
+    border-collapse: collapse; 
+    margin-bottom: 20px;
+}
+
+.table th, .table td { 
+    border: 1px solid #d1d5db; 
+    padding: 8px; 
+    text-align: {{ app()->getLocale() === 'ar' ? 'right' : 'left' }};
+}
+
+.table th { 
+    background-color: #e5e7eb; 
+    font-weight: bold;
+    font-size: 14px;
+}
+```
+
+### Page Break Control
+```css
+.page-break {
+    page-break-before: always;
+}
+
+.no-break {
+    page-break-inside: avoid;
+}
+```
+
+## Multi-Language Support
+
+### Language Detection
+```php
+// Detect user language from multiple sources
+private function getUserLanguage(): string
+{
+    return session('locale') 
+        ?? request()->header('Accept-Language')
+        ?? request()->cookie('locale')
+        ?? app()->getLocale();
+}
+```
+
+### RTL Layout Support
+```php
+// RTL layout detection
+private function isRtlLanguage(string $locale): bool
+{
+    return in_array($locale, ['ar', 'ku']);
+}
+
+// Apply RTL styles
+$rtlClass = $this->isRtlLanguage($locale) ? 'rtl' : 'ltr';
+```
+
+### Translation in PDFs
+```php
+// Translate text for PDFs
+private function translateForPdf(string $key, string $locale = null): string
+{
+    $locale = $locale ?? $this->getUserLanguage();
+    $original = app()->getLocale();
+    
+    app()->setLocale($locale);
+    $translation = __($key);
+    app()->setLocale($original);
+    
+    return $translation;
+}
+```
+
+## Performance Optimization
+
+### Large Dataset Handling
+```php
+// Use chunking for very large datasets
+private function exportPdf(string $type, array $data): Response
+{
+    // Set memory limits
+    ini_set('memory_limit', '2048M');
+    ini_set('max_execution_time', 600);
+    
+    // Process data in chunks if needed
+    if (count($data['records']) > 1000) {
+        $data['records'] = $this->chunkData($data['records'], 1000);
+    }
+    
+    return $this->generatePdf($type, $data);
+}
+```
+
+### Memory Management
+```php
+// Set appropriate memory limits
+ini_set('memory_limit', '2048M');
+ini_set('max_execution_time', 600);
+
+// Use streaming for very large PDFs
+return response()->streamDownload(function () use ($data) {
+    $pdf = PDF::loadView('reports.generic-pdf', $data);
+    $pdf->stream();
+}, $filename);
+```
+
+### Caching
+```php
+// Cache expensive data preparation
+public function getPdfData(): array
+{
+    $cacheKey = "pdf-data-{$this->type}-" . md5(serialize($this->filters));
+    
+    return Cache::remember($cacheKey, 300, function () {
+        return $this->preparePdfData();
+    });
+}
+```
+
+## Best Practices
+
+### 1. Error Handling
+```php
+try {
+    $pdf = PDF::loadView('reports.generic-pdf', $data);
+    return $pdf->download($filename);
+} catch (\Exception $e) {
+    Log::error('PDF Export Failed', [
+        'error' => $e->getMessage(),
+        'trace' => $e->getTraceAsString(),
+    ]);
+    
+    return redirect()->back()->with('error', __('PDF export failed. Please try again.'));
+}
+```
+
+### 2. Data Validation
+```php
+// Validate data before PDF generation
+if (empty($data['records'])) {
+    return redirect()->back()->with('error', __('No data found for PDF export.'));
+}
+
+// Check data size
+if (count($data['records']) > 5000) {
+    return redirect()->back()->with('warning', __('Dataset too large for PDF. Please apply filters.'));
+}
+```
+
+### 3. File Naming
+```php
+// Generate descriptive filenames
+$filename = "{$type}-report-" . now()->format('Y-m-d-H-i-s') . '.pdf';
+
+// Include user context
+$filename = "{$type}-report-{$user->name}-" . now()->format('Y-m-d') . '.pdf';
+```
+
+### 4. Security
+```php
+// Sanitize all output data
+$sanitizedData = array_map(function($record) {
+    return [
+        'id' => $record->id,
+        'name' => e($record->name),
+        'email' => e($record->email),
+        'status' => e($record->status),
+    ];
+}, $data['records']);
+```
+
+## Troubleshooting
+
+### Common Issues
+
+1. **Arabic Text Not Displaying**
+   ```php
+   // Solution: Use proper font and encoding
+   $pdf = PDF::loadView('view', $data, [], [
+       'format' => 'A4-P',
+       'mode' => 'utf-8',
+   ]);
+   ```
+
+2. **RTL Layout Issues**
+   ```css
+   /* Solution: Use proper RTL CSS */
+   .rtl { 
+       direction: rtl; 
+       text-align: right; 
+   }
+   ```
+
+3. **Memory Exhaustion**
+   ```php
+   // Solution: Increase memory limit and use chunking
+   ini_set('memory_limit', '2048M');
+   $data = $this->chunkData($data, 1000);
+   ```
+
+4. **Page Break Issues**
+   ```css
+   /* Solution: Use proper page break CSS */
+   .page-break {
+       page-break-before: always;
+   }
+   
+   .no-break {
+       page-break-inside: avoid;
+   }
+   ```
+
+### Performance Monitoring
+
+```php
+// Monitor memory usage
+$memoryUsage = memory_get_usage(true);
+$peakMemory = memory_get_peak_usage(true);
+
+// Monitor execution time
+$startTime = microtime(true);
+// ... PDF operations
+$executionTime = microtime(true) - $startTime;
+
+// Log performance metrics
+Log::info('PDF Export Performance', [
+    'memory_usage' => $memoryUsage,
+    'peak_memory' => $peakMemory,
+    'execution_time' => $executionTime,
+    'record_count' => count($records),
+]);
+```
