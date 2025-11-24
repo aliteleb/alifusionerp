@@ -14,7 +14,7 @@ class MigrationStatusService
         // Get migration status using Artisan
         $exitCode = Artisan::call('migrate:status', [
             '--database' => $connectionName,
-            '--path' => 'database/migrations/tenant',
+            '--path' => 'Modules/Core/database/migrations',
         ]);
 
         $output = Artisan::output();
@@ -176,8 +176,8 @@ class MigrationStatusService
     private function getMigrationsFromDatabase(): array
     {
         try {
-            // Get all migration files from the tenant migrations directory
-            $migrationPath = database_path('migrations/tenant');
+            // Get all migration files from the Core module migrations directory
+            $migrationPath = module_path('Core', 'database/migrations');
             $migrations = [];
 
             if (! is_dir($migrationPath)) {

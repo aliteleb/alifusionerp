@@ -6,5 +6,6 @@
     "ActivityLog": true,
     "Settings": true,
     "Backup": true,
-    "System": true
+    "System": true,
+    "Survey": true
 }

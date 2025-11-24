@@ -15,7 +15,7 @@ class SeedRolesAndPermissionsActionTest extends TestCase
     public function test_logs_permissions_creation_once_per_execution(): void
     {
         Artisan::call('migrate', [
-            '--path' => 'database/migrations/master',
+            '--path' => 'Modules/Master/database/migrations',
             '--database' => config('database.default'),
             '--force' => true,
         ]);

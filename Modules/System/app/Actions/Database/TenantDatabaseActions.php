@@ -2,10 +2,6 @@
 
 namespace Modules\System\Actions\Database;
 
-use Modules\System\Actions\Facility\SeedFacilityDataAction;
-use Modules\Master\Entities\Facility;
-use Modules\Core\Services\MigrationStatusService;
-use Modules\Core\Services\TenantDatabaseService;
 use Exception;
 use Filament\Notifications\Notification;
 use Illuminate\Support\Facades\Artisan;
@@ -13,6 +9,10 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Process;
+use Modules\Core\Services\MigrationStatusService;
+use Modules\Core\Services\TenantDatabaseService;
+use Modules\Master\Entities\Facility;
+use Modules\System\Actions\Facility\SeedFacilityDataAction;
 
 class TenantDatabaseActions
 {
@@ -121,7 +121,7 @@ class TenantDatabaseActions
             // Capture the output of the migrate command directly
             Artisan::call('migrate', [
                 '--database' => $connectionName,
-                '--path' => 'database/migrations/tenant',
+                '--path' => 'Modules/Core/database/migrations',
                 '--force' => true,
             ]);
 
@@ -131,7 +131,7 @@ class TenantDatabaseActions
             if (empty($migrationOutput)) {
                 $migrationOutput = "Migration completed successfully but no output was generated.\n";
                 $migrationOutput .= "Connection: {$connectionName}\n";
-                $migrationOutput .= "Path: database/migrations/tenant\n";
+                $migrationOutput .= "Path: Modules/Core/database/migrations\n";
             }
 
             TenantDatabaseService::switchToMaster();
@@ -175,7 +175,7 @@ class TenantDatabaseActions
             // Capture the output of the migrate:rollback command
             Artisan::call('migrate:rollback', [
                 '--database' => $connectionName,
-                '--path' => 'database/migrations/tenant',
+                '--path' => 'Modules/Core/database/migrations',
                 '--force' => true,
             ]);
 
@@ -185,7 +185,7 @@ class TenantDatabaseActions
             if (empty($rollbackOutput)) {
                 $rollbackOutput = "Rollback completed successfully but no output was generated.\n";
                 $rollbackOutput .= "Connection: {$connectionName}\n";
-                $rollbackOutput .= "Path: database/migrations/tenant\n";
+                $rollbackOutput .= "Path: Modules/Core/database/migrations\n";
             }
 
             TenantDatabaseService::switchToMaster();

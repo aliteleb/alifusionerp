@@ -2,12 +2,12 @@
 
 namespace Modules\Core\Console\Commands;
 
-use Modules\System\Actions\Facility\SeedFacilityDataAction;
-use Modules\Master\Entities\Facility;
-use Modules\Core\Services\TenantDatabaseService;
 use Exception;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Artisan;
+use Modules\Core\Services\TenantDatabaseService;
+use Modules\Master\Entities\Facility;
+use Modules\System\Actions\Facility\SeedFacilityDataAction;
 use stdClass;
 
 class TenantMigrateCommand extends Command
@@ -19,6 +19,7 @@ class TenantMigrateCommand extends Command
      */
     protected $signature = 'tenant:migrate 
                             {--facility= : Specific facility subdomain or ID to migrate (if not provided, migrates all facilities)}
+                            {--module=* : Specific module(s) to migrate (if not provided, migrates all modules except Master)}
                             {--fresh : Drop all tables and re-run all migrations}
                             {--seed : Run database seeders after migration}
                             {--rollback : Rollback migrations instead of running them}
@@ -30,7 +31,7 @@ class TenantMigrateCommand extends Command
      *
      * @var string
      */
-    protected $description = 'Run migrations for tenant databases (all facilities or specific facility, supports rollback)';
+    protected $description = 'Run migrations for tenant databases (all facilities or specific facility, supports rollback). By default runs migrations from all modules except Master.';
 
     /**
      * Execute the console command.
@@ -136,7 +137,7 @@ class TenantMigrateCommand extends Command
     private function runMigrationForFacility(Facility $facility): int
     {
         try {
-            $connectionName = TenantDatabaseService::getTenantConnectionName($facility);
+            $connectionName = TenantDatabaseService::TENANT_CONNECTION;
 
             // Ensure database exists (skip for rollback)
             if (! $this->option('rollback')) {
@@ -150,55 +151,107 @@ class TenantMigrateCommand extends Command
 
                 // Switch back if we were on tenant before
                 if ($wasOnTenant) {
-                    TenantDatabaseService::switchToTenant($facility);
+                    TenantDatabaseService::connectToFacility($facility);
                 }
             }
 
             // Configure the tenant connection (ensure we're on the right tenant)
-            TenantDatabaseService::switchToTenant($facility);
+            TenantDatabaseService::connectToFacility($facility);
 
-            // Build command options
-            $options = [
-                '--database' => $connectionName,
-                '--path' => 'database/migrations/tenant',
-            ];
+            // Get modules to migrate
+            $modulesToMigrate = $this->getModulesToMigrate();
 
-            $command = 'migrate';
+            if (empty($modulesToMigrate)) {
+                $this->warn("No modules found to migrate for facility '{$facility->name}'");
+                TenantDatabaseService::switchToMaster();
 
-            if ($this->option('rollback')) {
-                $command = 'migrate:rollback';
+                return self::SUCCESS;
+            }
 
-                // Add step option if provided for rollback
-                if ($this->option('step')) {
-                    $options['--step'] = $this->option('step');
+            // Display which modules will be migrated
+            $this->line('📦 Migrating modules: '.implode(', ', $modulesToMigrate));
+
+            // Handle --fresh option (only for first module, drops all tables)
+            if ($this->option('fresh') && ! $this->option('rollback')) {
+                $firstModule = $modulesToMigrate[0];
+                $firstModulePath = "Modules/{$firstModule}/database/migrations";
+
+                if (is_dir(base_path($firstModulePath))) {
+                    $this->line("  → Running fresh migration for module: {$firstModule} (this will drop all tables)");
+                    $options = [
+                        '--database' => $connectionName,
+                        '--path' => $firstModulePath,
+                        '--force' => $this->option('force') ?: true,
+                    ];
+
+                    Artisan::call('migrate:fresh', $options);
+                    $output = trim(Artisan::output());
+                    if ($output) {
+                        $this->line("    ✓ {$firstModule}: {$output}");
+                    }
+
+                    // Remove first module from list since it's already migrated with fresh
+                    array_shift($modulesToMigrate);
+                }
+            }
+
+            // Run migrations for remaining modules (or all if not using --fresh)
+            foreach ($modulesToMigrate as $moduleName) {
+                $migrationPath = "Modules/{$moduleName}/database/migrations";
+
+                // Check if migration directory exists
+                if (! is_dir(base_path($migrationPath))) {
+                    $this->warn("⚠️  Migration directory not found for module '{$moduleName}': {$migrationPath}");
+
+                    continue;
                 }
 
-                // Confirmation for rollback (unless forced)
-                if (! $this->option('force')) {
-                    $stepText = $this->option('step') ? $this->option('step').' migration(s)' : 'last migration batch';
-                    if (! $this->confirm("Rollback {$stepText} for facility '{$facility->name}'?")) {
-                        $this->line("Skipping rollback for {$facility->name}");
-                        TenantDatabaseService::switchToMaster();
+                $this->line("  → Running migrations for module: {$moduleName}");
 
-                        return self::SUCCESS;
+                // Build command options
+                $options = [
+                    '--database' => $connectionName,
+                    '--path' => $migrationPath,
+                ];
+
+                $command = 'migrate';
+
+                if ($this->option('rollback')) {
+                    $command = 'migrate:rollback';
+
+                    // Add step option if provided for rollback
+                    if ($this->option('step')) {
+                        $options['--step'] = $this->option('step');
+                    }
+
+                    // Confirmation for rollback (unless forced) - only ask once for all modules
+                    if (! $this->option('force') && $moduleName === $modulesToMigrate[0]) {
+                        $stepText = $this->option('step') ? $this->option('step').' migration(s)' : 'last migration batch';
+                        if (! $this->confirm("Rollback {$stepText} for facility '{$facility->name}'?")) {
+                            $this->line("Skipping rollback for {$facility->name}");
+                            TenantDatabaseService::switchToMaster();
+
+                            return self::SUCCESS;
+                        }
                     }
                 }
-            } else {
-                // Regular migration options
-                if ($this->option('fresh')) {
-                    $command = 'migrate:fresh';
+
+                if ($this->option('force')) {
+                    $options['--force'] = true;
                 }
 
-                // DON'T add --seed to the migrate command
-                // We'll handle tenant seeding separately after migration
+                // Run the migration command for this module
+                try {
+                    Artisan::call($command, $options);
+                    $output = trim(Artisan::output());
+                    if ($output) {
+                        $this->line("    ✓ {$moduleName}: {$output}");
+                    }
+                } catch (Exception $e) {
+                    $this->error("    ✗ {$moduleName}: {$e->getMessage()}");
+                    throw $e;
+                }
             }
-
-            if ($this->option('force')) {
-                $options['--force'] = true;
-            }
-
-            // Run the migration command (without --seed)
-            Artisan::call($command, $options);
 
             // Handle tenant seeding separately after successful migration
             if ($this->option('seed') && ! $this->option('rollback')) {
@@ -257,9 +310,80 @@ class TenantMigrateCommand extends Command
      */
     private function seedTenantDataOnly(Facility $facility): void
     {
-        $seedAction = new \App\Core\Actions\Facility\SeedFacilityDataAction;
+        $seedAction = new SeedFacilityDataAction;
         $this->info("🌱 {$facility->name}: Running tenant-specific seeding...");
         $seedAction->execute($facility);
         $this->info("✅ {$facility->name}: Tenant seeding completed successfully!");
+    }
+
+    /**
+     * Get modules to migrate based on --module option or discover all modules except Master
+     */
+    private function getModulesToMigrate(): array
+    {
+        $selectedModules = $this->option('module');
+
+        // If specific modules are selected, validate and return them
+        if (! empty($selectedModules)) {
+            $validModules = [];
+            foreach ($selectedModules as $moduleName) {
+                if ($this->moduleExists($moduleName) && $moduleName !== 'Master') {
+                    $validModules[] = $moduleName;
+                } else {
+                    if ($moduleName === 'Master') {
+                        $this->warn("⚠️  Master module is excluded from tenant migrations. Skipping '{$moduleName}'.");
+                    } else {
+                        $this->warn("⚠️  Module '{$moduleName}' not found. Skipping.");
+                    }
+                }
+            }
+
+            return $validModules;
+        }
+
+        // Otherwise, discover all modules except Master
+        return $this->discoverTenantModules();
+    }
+
+    /**
+     * Discover all modules that have tenant migrations (excluding Master)
+     */
+    private function discoverTenantModules(): array
+    {
+        $modulesPath = base_path('Modules');
+        $modules = [];
+
+        if (! is_dir($modulesPath)) {
+            return $modules;
+        }
+
+        $directories = scandir($modulesPath);
+
+        foreach ($directories as $directory) {
+            // Skip . and .. and Master module
+            if ($directory === '.' || $directory === '..' || $directory === 'Master') {
+                continue;
+            }
+
+            $modulePath = $modulesPath.'/'.$directory;
+            $migrationsPath = $modulePath.'/database/migrations';
+
+            // Check if it's a directory and has migrations
+            if (is_dir($modulePath) && is_dir($migrationsPath)) {
+                $modules[] = $directory;
+            }
+        }
+
+        return $modules;
+    }
+
+    /**
+     * Check if a module exists
+     */
+    private function moduleExists(string $moduleName): bool
+    {
+        $modulePath = base_path('Modules/'.$moduleName);
+
+        return is_dir($modulePath);
     }
 }

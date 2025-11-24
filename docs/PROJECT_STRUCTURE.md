@@ -53,7 +53,7 @@ alifusionerp/
 │   ├── Core/                    # Shared organization data & tenant panel (users, roles, tenant resources)
 │   ├── System/                  # System-wide tenant orchestration & infrastructure
 │   ├── Master/                  # Master panel module
-│   └── ReferenceData/           # Reference data management
+│   └── Survey/                  # Survey management module + dedicated survey panel
 ├── public/                       # Public assets
 ├── resources/
 │   ├── css/                     # Stylesheets
@@ -196,15 +196,19 @@ modules/{ModuleName}/
 
 ---
 
-### 4. ReferenceData Module
+### 4. Survey Module
 
-**Location**: `modules/ReferenceData/`  
-**Namespace**: `Modules\ReferenceData`  
-**Purpose**: Reference data management (countries, currencies, genders, etc.)
+**Location**: `modules/Survey/`  
+**Namespace**: `Modules\Survey`  
+**Purpose**: Encapsulates the standalone survey project (`dws-survey`) inside Ali Fusion ERP as a first-class module. Hosts survey definitions, invitations, responses, WhatsApp automation, and provides a dedicated Filament panel that still reuses Core resources.
 
 **Key Components**:
-- **Filament Resources**: Country, Currency, Gender, MaritalStatus, Nationality resources
-- **Entities**: Reference data entities (if any)
+- **Entities**: `Survey`, `SurveyCategory`, `SurveyInvitation`, `SurveyResponse`, `RatingReport`, `Notice`, `Reward`, and supporting models migrated from the survey app.
+- **Actions & Services**: Invitation scheduling, WhatsApp/UltraMSG dispatchers, public survey access helpers, context-aware queue/database utilities.
+- **Filament Resources**: All survey-specific resources plus discovery of shared `Core` resources so operators can manage users, roles, branches, etc., without duplication.
+- **Imports/Exports**: Survey CSV/XLSX flows mapped to the module.
+- **Seeders & Migrations**: Module-scoped under `modules/Survey/database/*`, allowing tenant migrations to include/exclude survey structures independently.
+- **Panel Provider**: `Providers/Filament/SurveyPanelProvider.php` (see [Panel Providers](#panel-providers)).
 
 ---
 
@@ -362,7 +366,7 @@ The `wikimedia/composer-merge-plugin` is used to merge module `composer.json` fi
 
 ### Master Database
 
-**Location**: `database/migrations/master/`  
+**Location**: `modules/Master/database/migrations/`  
 **Purpose**: System-wide data and configuration
 
 **Key Tables**:
@@ -377,20 +381,14 @@ The `wikimedia/composer-merge-plugin` is used to merge module `composer.json` fi
 
 ### Tenant Databases
 
-**Location**: `database/migrations/tenant/`  
-**Purpose**: Facility-specific operational data
+**Location**: Module-scoped migrations (e.g. `modules/Core/database/migrations/`, `modules/Survey/database/migrations/`, etc.)  
+**Purpose**: Facility-specific operational data. The `tenant:migrate` command now discovers every module (except `Master`) and can optionally target specific modules with `--module=ModuleName`.
 
-**Key Tables**:
-- `customers` - Customer records
-- `branches` - Branch information
-- `departments` - Department data
-- `designations` - Designation data
-- `warehouses` - Warehouse data
-- `employees` - Employee records
-- `opportunities` - Sales opportunities
-- `tasks` - Task management
-- `projects` - Project management
-- `tickets` - Support tickets
+**Core Key Tables** (`modules/Core/database/migrations`):
+- `branches`, `departments`, `users`, `roles`, `activity_logs`, `messages`, etc.
+
+**Survey Key Tables** (`modules/Survey/database/migrations`):
+- `surveys`, `survey_categories`, `survey_invitations`, `survey_responses`, `rating_reports`, `notices`, `rewards`, plus pivot/audit tables required by survey features.
 
 ### Migration Commands
 
@@ -399,8 +397,9 @@ The `wikimedia/composer-merge-plugin` is used to merge module `composer.json` fi
 php artisan master:migrate --fresh --seed --force
 
 # Tenant databases
-php artisan tenant:migrate --force
-php artisan tenant:migrate --facility=subdomain --force
+php artisan tenant:migrate --force                       # All modules except Master
+php artisan tenant:migrate --module=Survey --force        # Survey-only migrations
+php artisan tenant:migrate --facility=subdomain --force   # Single facility, all modules
 ```
 
 ---
@@ -433,6 +432,19 @@ php artisan tenant:migrate --facility=subdomain --force
 - **Pages**: `Dashboard`, `Settings`, `Reports`, `BranchReports`
 - **Widgets**: `CustomAccountWidget`, `ActivityLogWidget`
 
+### Survey Panel Provider
+
+**Location**: `modules/Survey/app/Providers/Filament/SurveyPanelProvider.php`  
+**Namespace**: `Modules\Survey\Providers\Filament`
+
+**Configuration**:
+- **Panel ID**: `survey`
+- **Path**: `/survey`
+- **Domain**: `{subdomain}.alifusionerp.test`
+- **Resource Discovery**: Always discovers Survey module resources *and* Core module resources so operators can manage shared entities (Users, Branches, Roles, etc.) without leaving the survey workspace.
+- **Pages**: Shares the global dashboard + survey-specific operational pages.
+- **Widgets**: Reuses shared account/activity widgets and registers survey widgets defined inside the module.
+
 ### Service Provider Registration
 
 Service providers are registered in `bootstrap/providers.php`:
@@ -449,7 +461,8 @@ return [
     Modules\Master\Providers\MasterServiceProvider::class,
     Modules\Master\Providers\Filament\MasterPanelProvider::class,
     Modules\Core\Providers\Filament\AdminPanelProvider::class,
-    // ... other modules
+    Modules\Survey\Providers\SurveyServiceProvider::class,
+    Modules\Survey\Providers\Filament\SurveyPanelProvider::class,
 ];
 ```
 

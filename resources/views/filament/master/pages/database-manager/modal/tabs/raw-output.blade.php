@@ -31,7 +31,7 @@
         <ul class="text-xs text-gray-600 dark:text-gray-400 space-y-1 list-disc list-inside">
             <li>{{ __('If output is empty, the migration table may not exist yet') }}</li>
             <li>{{ __('Run migrations first: php artisan migrate --database=tenant_connection') }}</li>
-            <li>{{ __('Check if tenant migrations directory exists: database/migrations/tenant/') }}</li>
+            <li>{{ __('Check if tenant migrations directory exists: Modules/Core/database/migrations/') }}</li>
             <li>{{ __('Verify database connection settings for this tenant') }}</li>
         </ul>
     </div>

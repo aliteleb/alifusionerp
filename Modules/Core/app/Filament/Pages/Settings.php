@@ -2,13 +2,9 @@
 
 namespace Modules\Core\Filament\Pages;
 
-use Modules\Core\Entities\Currency;
-use Modules\Core\Entities\Setting;
-use Modules\Core\Entities\User;
 use Filament\Facades\Filament;
 use Filament\Forms\Components\FileUpload;
 use Filament\Forms\Components\Select;
-use Filament\Forms\Components\TagsInput;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
@@ -23,6 +19,9 @@ use Filament\Schemas\Components\Tabs\Tab;
 use Filament\Schemas\Schema;
 use Illuminate\Contracts\Auth\Authenticatable;
 use Illuminate\Contracts\Support\Htmlable;
+use Modules\Core\Entities\Currency;
+use Modules\Core\Entities\Setting;
+use Modules\Core\Entities\User;
 
 class Settings extends Page implements HasForms
 {
@@ -91,13 +90,14 @@ class Settings extends Page implements HasForms
     {
         return $form
             ->components([
-                Tabs::make('Tabs')
+                Tabs::make('organization-settings')
                     ->columnSpanFull()
                     ->tabs([
-                        Tab::make('General')->id('general')->label(__('General Information'))->icon('icon-menu')->schema($this->getGeneralSchema()),
-                        Tab::make('Tasks')->id('tasks')->label(__('Task Management'))->icon('heroicon-o-clipboard-document-list')->schema($this->getTaskManagementSchema()),
-                        Tab::make('Tickets')->id('tickets')->label(__('Ticket Management'))->icon('heroicon-o-ticket')->schema($this->getTicketManagementSchema()),
-                        Tab::make('Email')->id('email')->label(__('Email Settings'))->icon('heroicon-o-envelope')->schema($this->getEmailSchema()),
+                        Tab::make('organization')
+                            ->id('organization')
+                            ->label(__('Organization Settings'))
+                            ->icon('heroicon-o-building-office-2')
+                            ->schema($this->getGeneralSchema()),
                     ])->persistTab(),
             ])
             ->statePath('data')
@@ -177,118 +177,6 @@ class Settings extends Page implements HasForms
                         ->disk('tenant')
                         ->helperText(__('Recommended size: 32x32 pixels')),
                 ])->columns(2),
-        ];
-    }
-
-    private function getSEOSchema(): array
-    {
-        return [
-
-            Section::make([
-                TextInput::make('app_title')->placeholder(fn () => __('Site title'))->hiddenLabel()->helperText(fn () => __('Website title in search engines'))->prefixIcon('icon-caret'),
-            ])->compact()->columns(1)->heading(fn () => __('Site title')),
-
-            Section::make([
-                Textarea::make('app_description')->autosize()->placeholder(fn () => __('Site description'))->hiddenLabel()->helperText(fn () => __('Website description in search engines and social media')),
-            ])->compact()->columns(1)->heading(fn () => __('Site description')),
-
-            Section::make([
-                TagsInput::make('app_tags')->placeholder(fn () => __('Site keywords'))->hiddenLabel(),
-            ])->compact()->columns(1)->heading(fn () => __('Site keywords')),
-
-        ];
-    }
-
-    private function getTaskManagementSchema(): array
-    {
-        return [
-            Section::make(__('Task Status Change Settings'))
-                ->schema([
-                    Toggle::make('task_status_change_comment_mandatory')
-                        ->label(__('Require Comments for Status Changes'))
-                        ->helperText(__('When enabled, users must provide a comment when changing task status'))
-                        ->default(false)
-                        ->live(),
-
-                    Toggle::make('task_status_change_comment_optional')
-                        ->label(__('Allow Optional Comments for Status Changes'))
-                        ->helperText(__('When enabled, users can optionally provide a comment when changing task status (even if comments are not mandatory)'))
-                        ->default(true)
-                        ->visible(fn ($get) => ! $get('task_status_change_comment_mandatory')),
-
-                    Toggle::make('task_status_change_tracking')
-                        ->label(__('Track Status Change History'))
-                        ->helperText(__('When enabled, all status changes will be logged with timestamps and user information'))
-                        ->default(true),
-                ])->columns(1),
-        ];
-    }
-
-    private function getTicketManagementSchema(): array
-    {
-        return [
-            Section::make(__('Ticket Status Change Settings'))
-                ->schema([
-                    Toggle::make('ticket_status_change_comment_mandatory')
-                        ->label(__('Require Comments for Status Changes'))
-                        ->helperText(__('When enabled, users must provide a comment when changing ticket status'))
-                        ->default(false)
-                        ->live(),
-
-                    Toggle::make('ticket_status_change_comment_optional')
-                        ->label(__('Allow Optional Comments for Status Changes'))
-                        ->helperText(__('When enabled, users can optionally provide a comment when changing ticket status (even if comments are not mandatory)'))
-                        ->default(true)
-                        ->visible(fn ($get) => ! $get('ticket_status_change_comment_mandatory')),
-
-                    Toggle::make('ticket_status_change_tracking')
-                        ->label(__('Track Status Change History'))
-                        ->helperText(__('When enabled, all status changes will be logged with timestamps and user information'))
-                        ->default(true),
-                ])->columns(1),
-        ];
-    }
-
-    private function getEmailSchema(): array
-    {
-        return [
-            Section::make([
-                TextInput::make('mail_mailer')
-                    ->label(__('Mail Driver'))
-                    ->placeholder(__('smtp'))
-                    ->helperText(__('The mail service driver (smtp, sendmail, mailgun, etc.)')),
-                TextInput::make('mail_host')
-                    ->label(__('Mail Host'))
-                    ->placeholder(__('smtp.example.com'))
-                    ->helperText(__('The mail server host address')),
-                TextInput::make('mail_port')
-                    ->label(__('Mail Port'))
-                    ->placeholder(__('587'))
-                    ->helperText(__('The mail server port (usually 587 for TLS or 465 for SSL)'))
-                    ->numeric(),
-                TextInput::make('mail_username')
-                    ->label(__('Mail Username'))
-                    ->placeholder(__('username@example.com'))
-                    ->helperText(__('Your mail server username')),
-                TextInput::make('mail_password')
-                    ->label(__('Mail Password'))
-                    ->password()
-                    ->dehydrateStateUsing(fn ($state) => $state ? $state : null)
-                    ->helperText(__('Your mail server password')),
-                TextInput::make('mail_encryption')
-                    ->label(__('Mail Encryption'))
-                    ->placeholder(__('tls'))
-                    ->helperText(__('The encryption type (tls, ssl, or null)')),
-                TextInput::make('mail_from_address')
-                    ->label(__('Mail From Address'))
-                    ->placeholder(__('noreply@example.com'))
-                    ->helperText(__('The email address that will appear in the `From` field'))
-                    ->email(),
-                TextInput::make('mail_from_name')
-                    ->label(__('Mail From Name'))
-                    ->placeholder(__('Ali Fusion ERP'))
-                    ->helperText(__('The name that will appear in the `From` field')),
-            ])->compact()->columns(2)->heading(fn () => __('SMTP Settings')),
         ];
     }
 

@@ -1,0 +1,36 @@
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+return new class extends Migration
+{
+    /**
+     * Run the migrations.
+     */
+    public function up(): void
+    {
+        Schema::create('notices', function (Blueprint $table) {
+            $table->id();
+            $table->string('type')->comment('Type of notice (e.g. maintenance, HR, announcement)');
+            $table->text('description')->nullable();
+            $table->timestamp('start_date')->nullable()->index();
+            $table->timestamp('end_date')->nullable()->index();
+            $table->foreignId('by')
+                ->nullable()
+                ->constrained('users')
+                ->nullOnDelete();
+            $table->timestamps();
+            $table->softDeletes();
+        });
+    }
+
+    /**
+     * Reverse the migrations.
+     */
+    public function down(): void
+    {
+        Schema::dropIfExists('notices');
+    }
+};

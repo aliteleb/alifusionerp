@@ -2,27 +2,27 @@
 
 namespace Modules\System\Actions\Facility;
 
-use Modules\System\Actions\Facility\Seeding\SeedBranchDataAction;
-use Modules\System\Actions\Facility\Seeding\SeedDepartmentDataAction;
-use Modules\System\Actions\Facility\Seeding\SeedReferenceDataAction;
-use Modules\System\Actions\Facility\Seeding\SeedRolesAndPermissionsAction;
-use Modules\System\Actions\Facility\Seeding\SeedSettingsDataAction;
-use Modules\System\Actions\Facility\Seeding\SeedUserDataAction;
+use Exception;
+use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Schema;
 use Modules\Core\Entities\Branch;
 use Modules\Core\Entities\Country;
 use Modules\Core\Entities\Currency;
 use Modules\Core\Entities\Department;
-use Modules\Master\Entities\Facility;
 use Modules\Core\Entities\Gender;
 use Modules\Core\Entities\MaritalStatus;
 use Modules\Core\Entities\Nationality;
 use Modules\Core\Entities\Role;
 use Modules\Core\Entities\User;
 use Modules\Core\Services\TenantDatabaseService;
-use Exception;
-use Illuminate\Support\Facades\Artisan;
-use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Schema;
+use Modules\Master\Entities\Facility;
+use Modules\System\Actions\Facility\Seeding\SeedBranchDataAction;
+use Modules\System\Actions\Facility\Seeding\SeedDepartmentDataAction;
+use Modules\System\Actions\Facility\Seeding\SeedReferenceDataAction;
+use Modules\System\Actions\Facility\Seeding\SeedRolesAndPermissionsAction;
+use Modules\System\Actions\Facility\Seeding\SeedSettingsDataAction;
+use Modules\System\Actions\Facility\Seeding\SeedUserDataAction;
 
 class SeedFacilityDataAction
 {
@@ -41,7 +41,7 @@ class SeedFacilityDataAction
             $connectionName = TenantDatabaseService::TENANT_CONNECTION;
             Artisan::call('migrate', [
                 '--database' => $connectionName,
-                '--path' => 'database/migrations/tenant',
+                '--path' => 'Modules/Core/database/migrations',
                 '--force' => true,
             ]);
 

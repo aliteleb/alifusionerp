@@ -2,13 +2,13 @@
 
 namespace App\Console\Commands;
 
-use Modules\System\Actions\Database\TenantDatabaseActions;
-use Modules\Master\Entities\Facility;
-use Modules\Core\Services\TenantDatabaseService;
 use Exception;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Schema;
+use Modules\Core\Services\TenantDatabaseService;
+use Modules\Master\Entities\Facility;
+use Modules\System\Actions\Database\TenantDatabaseActions;
 
 class MasterMigrateCommand extends Command
 {
@@ -83,11 +83,11 @@ class MasterMigrateCommand extends Command
             $options['--force'] = true;
         }
 
-        // Run migrations from master directory only
-        $options['--path'] = 'database/migrations/master';
+        // Run migrations from Master module directory
+        $options['--path'] = 'Modules/Master/database/migrations';
 
         try {
-            $this->line('📊 Running migrations from: database/migrations/master');
+            $this->line('📊 Running migrations from: Modules/Master/database/migrations');
 
             Artisan::call($command, $options);
 
@@ -121,7 +121,7 @@ class MasterMigrateCommand extends Command
         $this->info('🔄 Rolling back master/system migrations...');
 
         $options = [
-            '--path' => 'database/migrations/master',
+            '--path' => 'Modules/Master/database/migrations',
         ];
 
         // Add step option if provided

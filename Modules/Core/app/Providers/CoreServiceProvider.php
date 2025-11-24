@@ -2,11 +2,8 @@
 
 namespace Modules\Core\Providers;
 
-use Illuminate\Support\Facades\Blade;
 use Illuminate\Support\ServiceProvider;
 use Nwidart\Modules\Traits\PathNamespace;
-use RecursiveDirectoryIterator;
-use RecursiveIteratorIterator;
 
 class CoreServiceProvider extends ServiceProvider
 {
@@ -26,19 +23,19 @@ class CoreServiceProvider extends ServiceProvider
         $this->registerTranslations();
         $this->registerConfig();
         $this->registerViews();
-        $this->loadMigrationsFrom(module_path($this->name, 'Database/Migrations'));
-        
+        $this->loadMigrationsFrom(module_path($this->name, 'database/migrations'));
+
         // Load helper functions
         $this->loadHelpers();
     }
-    
+
     /**
      * Load helper functions from the Core module.
      */
     protected function loadHelpers(): void
     {
         $helperPath = module_path($this->name, 'app/Helpers');
-        
+
         if (is_dir($helperPath)) {
             $helpers = [
                 'General.php',
@@ -47,9 +44,9 @@ class CoreServiceProvider extends ServiceProvider
                 'TranslationGlobalHelpers.php',
                 'SEO.php',
             ];
-            
+
             foreach ($helpers as $helper) {
-                $file = $helperPath . '/' . $helper;
+                $file = $helperPath.'/'.$helper;
                 if (file_exists($file)) {
                     require_once $file;
                 }
@@ -144,7 +141,7 @@ class CoreServiceProvider extends ServiceProvider
         $sourcePath = module_path($this->name, 'Resources/views');
 
         $this->publishes([
-            $sourcePath => $viewPath
+            $sourcePath => $viewPath,
         ], ['views', $this->nameLower.'-module-views']);
 
         $this->loadViewsFrom(array_merge($this->getPublishableViewPaths(), [$sourcePath]), $this->nameLower);
