@@ -2,9 +2,12 @@
 
 namespace App\Providers;
 
+use Filament\Forms\Components\Select;
+use Filament\Tables\Filters\SelectFilter;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\ServiceProvider;
+use Illuminate\Support\Str;
 
 class MacroServiceProvider extends ServiceProvider
 {
@@ -26,6 +29,110 @@ class MacroServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        // Register Select (Form) macro for searching by specific columns (including JSON)
+        Select::macro('searchableBy', function (array|string $columns, ?string $modelClass = null, int $limit = 50, ?\Closure $labelFormatter = null) {
+            /** @var Select $this */
+            $columns = \is_array($columns) ? $columns : [$columns];
+
+            if (! $modelClass && ($relationshipName = $this->getRelationshipName())) {
+                $modelClass = '\\App\\Models\\'.ucfirst($relationshipName);
+            }
+
+            $select = $this
+                ->searchable()
+                ->getSearchResultsUsing(function (string $search) use ($columns, $limit, $modelClass, $labelFormatter) {
+                    if (! $modelClass || ! class_exists($modelClass)) {
+                        return collect();
+                    }
+
+                    $query = $modelClass::query()
+                        ->when(\method_exists($modelClass, 'scopeActive'), fn ($q) => $q->active());
+
+                    $query->where(function ($q) use ($columns, $search) {
+                        foreach ($columns as $column) {
+                            $q->orWhere(function ($subQuery) use ($column, $search) {
+                                $subQuery->where($column, 'like', "%{$search}%");
+
+                                if (Str::contains($column, 'phone')) {
+                                    $flatSearch = str_replace([' ', '-', '(', ')', '+'], '', $search);
+
+                                    $subQuery->orWhereRaw(
+                                        "REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(LOWER({$column}), ' ', ''), '-', ''), '(', ''), ')', ''), '+', '') LIKE ?",
+                                        ['%'.strtolower($flatSearch).'%']
+                                    );
+                                }
+                            });
+                        }
+                    });
+
+                    $results = $query->limit($limit)->get();
+
+                    if ($labelFormatter) {
+                        return $results->mapWithKeys(fn ($record) => [$record->id => $labelFormatter($record)]);
+                    }
+
+                    return $results->pluck($columns[0], 'id');
+                });
+
+            if ($labelFormatter) {
+                $select->getOptionLabelFromRecordUsing($labelFormatter);
+            }
+
+            return $select;
+        });
+
+        // Register SelectFilter macro for searching by specific columns (including JSON)
+        SelectFilter::macro('searchableBy', function (array|string $columns, ?string $modelClass = null, int $limit = 50, ?\Closure $labelFormatter = null) {
+            /** @var SelectFilter $this */
+            $columns = \is_array($columns) ? $columns : [$columns];
+
+            if (! $modelClass && ($relationshipName = $this->getRelationshipName())) {
+                $modelClass = '\\App\\Models\\'.ucfirst($relationshipName);
+            }
+
+            $filter = $this
+                ->searchable()
+                ->getSearchResultsUsing(function (string $search) use ($columns, $limit, $modelClass, $labelFormatter) {
+                    if (! $modelClass || ! class_exists($modelClass)) {
+                        return collect();
+                    }
+
+                    $query = $modelClass::query()
+                        ->when(\method_exists($modelClass, 'scopeActive'), fn ($q) => $q->active());
+
+                    $query->where(function ($q) use ($columns, $search) {
+                        foreach ($columns as $column) {
+                            $q->orWhere(function ($subQuery) use ($column, $search) {
+                                $subQuery->where($column, 'like', "%{$search}%");
+
+                                if (Str::contains($column, 'phone')) {
+                                    $flatSearch = str_replace([' ', '-', '(', ')', '+'], '', $search);
+
+                                    $subQuery->orWhereRaw(
+                                        "REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(LOWER({$column}), ' ', ''), '-', ''), '(', ''), ')', ''), '+', '') LIKE ?",
+                                        ['%'.strtolower($flatSearch).'%']
+                                    );
+                                }
+                            });
+                        }
+                    });
+
+                    $results = $query->limit($limit)->get();
+
+                    if ($labelFormatter) {
+                        return $results->mapWithKeys(fn ($record) => [$record->id => $labelFormatter($record)]);
+                    }
+
+                    return $results->pluck($columns[0], 'id');
+                });
+
+            if ($labelFormatter) {
+                $filter->getOptionLabelFromRecordUsing($labelFormatter);
+            }
+
+            return $filter;
+        });
+
         // Custom macro for sorting by JSON relationship columns - detects export context
         Builder::macro('orderByJsonRelation', function (string $relationPath, string $direction = 'asc') {
             $locale = app()->getLocale();

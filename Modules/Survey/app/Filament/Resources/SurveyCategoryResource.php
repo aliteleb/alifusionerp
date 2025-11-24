@@ -12,6 +12,8 @@ use Filament\Actions\EditAction;
 use Filament\Facades\Filament;
 use Filament\Forms;
 use Filament\Resources\Resource;
+use Filament\Schemas\Components\Grid;
+use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables;
@@ -103,7 +105,7 @@ class SurveyCategoryResource extends Resource
     {
         return $schema
             ->components([
-                Forms\Components\Section::make(__('Category Information'))
+                Section::make(__('Category Information'))
                     ->description(__('Define the survey category with multi-language support'))
                     ->icon('heroicon-o-tag')
                     ->schema([
@@ -140,11 +142,11 @@ class SurveyCategoryResource extends Resource
                     ->persistCollapsed()
                     ->compact(),
 
-                Forms\Components\Section::make(__('Display Settings'))
+                Section::make(__('Display Settings'))
                     ->description(__('Configure how this category appears in the interface'))
                     ->icon('heroicon-o-paint-brush')
                     ->schema([
-                        Forms\Components\Grid::make(2)
+                        Grid::make(2)
                             ->schema([
                                 Forms\Components\Select::make('icon')
                                     ->label(__('Icon'))

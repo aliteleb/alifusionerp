@@ -4,8 +4,8 @@ namespace Modules\Survey\Filament\Resources\SurveyResponseResource\Pages;
 
 use App\Models\SurveyResponse;
 use Filament\Actions;
-use Filament\Resources\Components\Tab;
 use Filament\Resources\Pages\ListRecords;
+use Filament\Schemas\Components\Tabs\Tab;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;

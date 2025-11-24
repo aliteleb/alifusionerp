@@ -18,6 +18,7 @@ use Filament\Actions\RestoreBulkAction;
 use Filament\Facades\Filament;
 use Filament\Forms;
 use Filament\Resources\Resource;
+use Filament\Schemas\Components\Group;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables;
@@ -110,38 +111,22 @@ class CustomerResource extends Resource
     public static function form(Schema $schema): Schema
     {
         return $schema
+            ->columns(3)
             ->components([
-                Forms\Components\Section::make(__('Branch Selection'))
-                    ->description(__('Select which branch this customer belongs to'))
-                    ->icon('heroicon-o-building-storefront')
+                Group::make()
+                    ->columnSpan(2)
                     ->schema([
-                        Forms\Components\Select::make('branch_id')
-                            ->label(__('Target Branch'))
-                            ->options(Branch::pluck('name', 'id'))
-                            ->required()
-                            ->searchable()
-                            ->preload()
-                            ->prefixIcon('heroicon-o-map-pin')
-                            ->helperText(__('As an HQ user, you can select any branch from your facilities.'))
-                            ->columnSpanFull(),
-                    ])
-                    ->collapsible()
-                    ->persistCollapsed()
-                    ->compact(),
-
-                Forms\Components\Section::make(__('Customer Information'))
-                    ->description(__('Add a new customer for survey feedback'))
-                    ->icon('heroicon-o-user-plus')
-                    ->schema([
-                        Forms\Components\Grid::make(2)
+                        Forms\Components\Section::make(__('Customer Information'))
+                            ->description(__('Add a new customer for survey feedback'))
+                            ->icon('heroicon-o-user-plus')
+                            ->columns(2)
                             ->schema([
                                 Forms\Components\TextInput::make('name')
                                     ->label(__('Name'))
                                     ->required()
                                     ->maxLength(100)
                                     ->placeholder(__('Enter customer name'))
-                                    ->prefixIcon('heroicon-o-user')
-                                    ->columnSpan(1),
+                                    ->prefixIcon('heroicon-o-user'),
 
                                 PhoneInput::make('phone')
                                     ->label(__('Phone'))
@@ -150,8 +135,7 @@ class CustomerResource extends Resource
                                     ->helperText(__('Enter phone number with country code'))
                                     ->prefixIcon('heroicon-o-phone')
                                     ->unique(Customer::class, 'phone', ignoreRecord: true)
-                                    ->columnSpan(1)
-                                    ->defaultCountry('IQ') // Default to Iraq
+                                    ->defaultCountry('IQ')
                                     ->displayNumberFormat(PhoneInputNumberType::NATIONAL)
                                     ->inputNumberFormat(PhoneInputNumberType::INTERNATIONAL),
 
@@ -161,8 +145,7 @@ class CustomerResource extends Resource
                                     ->placeholder(__('Select birthday'))
                                     ->helperText(__("Customer's date of birth (optional)"))
                                     ->prefixIcon('heroicon-o-cake')
-                                    ->displayFormat('d/m/Y')
-                                    ->columnSpan(1),
+                                    ->displayFormat('d/m/Y'),
 
                                 Forms\Components\Select::make('gender_id')
                                     ->label(__('Gender'))
@@ -172,15 +155,14 @@ class CustomerResource extends Resource
                                     ->preload()
                                     ->placeholder(__('Select gender'))
                                     ->helperText(__('Customer gender is required'))
-                                    ->prefixIcon('heroicon-o-identification')
-                                    ->columnSpan(1),
+                                    ->prefixIcon('heroicon-o-identification'),
 
                                 Forms\Components\Textarea::make('address')
                                     ->label(__('Address'))
                                     ->rows(3)
                                     ->placeholder(__('Enter full address'))
                                     ->helperText(__("Customer's address (optional)"))
-                                    ->columnSpan(1),
+                                    ->columnSpan(2),
 
                                 Forms\Components\TextInput::make('email')
                                     ->label(__('Email'))
@@ -190,7 +172,7 @@ class CustomerResource extends Resource
                                     ->helperText(__("Customer's email address (optional)"))
                                     ->prefixIcon('heroicon-o-envelope')
                                     ->unique(Customer::class, 'email', ignoreRecord: true)
-                                    ->columnSpan(1),
+                                    ->columnSpan(2),
 
                                 Forms\Components\DateTimePicker::make('visit_time')
                                     ->label(__('Visit time'))
@@ -200,11 +182,32 @@ class CustomerResource extends Resource
                                     ->prefixIcon('heroicon-o-clock')
                                     ->displayFormat('d/m/Y H:i')
                                     ->columnSpan(2),
-                            ]),
-                    ])
-                    ->collapsible()
-                    ->persistCollapsed()
-                    ->compact(),
+                            ])
+                            ->collapsible()
+                            ->persistCollapsed()
+                            ->compact(),
+                    ]),
+                Group::make()
+                    ->columnSpan(1)
+                    ->schema([
+                        Forms\Components\Section::make(__('Branch Selection'))
+                            ->description(__('Select which branch this customer belongs to'))
+                            ->icon('heroicon-o-building-storefront')
+                            ->schema([
+                                Forms\Components\Select::make('branch_id')
+                                    ->label(__('Target Branch'))
+                                    ->options(Branch::pluck('name', 'id'))
+                                    ->required()
+                                    ->searchable()
+                                    ->preload()
+                                    ->prefixIcon('heroicon-o-map-pin')
+                                    ->helperText(__('As an HQ user, you can select any branch from your facilities.'))
+                                    ->columnSpanFull(),
+                            ])
+                            ->collapsible()
+                            ->persistCollapsed()
+                            ->compact(),
+                    ]),
             ]);
     }
 

@@ -12,8 +12,9 @@ use BackedEnum;
 use Filament\Actions;
 use Filament\Facades\Filament;
 use Filament\Forms;
-use Filament\Forms\Get;
 use Filament\Resources\Resource;
+use Filament\Schemas\Components\Group;
+use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables;
@@ -104,88 +105,117 @@ class SurveyResource extends Resource
 
     public static function form(Schema $schema): Schema
     {
+        $qrComponent = null;
+
+        if (class_exists(\LaraZeus\Qr\Components\Qr::class)) {
+            $qrComponent = \LaraZeus\Qr\Components\Qr::make('qr_code_url')
+                ->optionsColumn('qr_options')
+                ->asSlideOver()
+                ->actionIcon('heroicon-o-qr-code')
+                ->afterStateHydrated(function ($state, callable $set, $record) {
+                    if ($record) {
+                        $set('qr_code_url', $record->getPublicAccessUrl());
+                    }
+                })
+                ->visible(fn ($get, $record): bool => (bool) $get('public_access_enabled') || ($record && $record->public_access_enabled))
+                ->columnSpanFull();
+        }
+
         return $schema
+            ->columns(3)
             ->components([
-                Forms\Components\Grid::make(4)->schema([
-                    Forms\Components\Section::make(__('Survey Information'))
-                        ->description(__('Basic survey details with multi-language support'))
-                        ->icon('heroicon-o-clipboard-document-list')
-                        ->schema([
-                            Translate::make()
-                                ->schema([
-                                    Forms\Components\TextInput::make('title')
-                                        ->label(__('Title'))
-                                        ->required()
-                                        ->maxLength(200),
-                                ])
-                                ->locales(appLocales())
-                                ->columnSpanFull(),
+                Group::make()
+                    ->columnSpan(2)
+                    ->schema([
+                        Section::make(__('Survey Information'))
+                            ->description(__('Basic survey details with multi-language support'))
+                            ->icon('heroicon-o-clipboard-document-list')
+                            ->schema([
+                                Translate::make()
+                                    ->schema([
+                                        Forms\Components\TextInput::make('title')
+                                            ->label(__('Title'))
+                                            ->required()
+                                            ->maxLength(200),
+                                    ])
+                                    ->locales(appLocales())
+                                    ->columnSpanFull(),
 
-                            Forms\Components\TextInput::make('slug')
-                                ->label(__('URL Slug'))
-                                ->required()
-                                ->unique(Survey::class, 'slug', ignoreRecord: true)
-                                ->helperText(__('URL-friendly identifier'))
-                                ->columnSpanFull(),
+                                Forms\Components\TextInput::make('slug')
+                                    ->label(__('URL Slug'))
+                                    ->required()
+                                    ->unique(Survey::class, 'slug', ignoreRecord: true)
+                                    ->helperText(__('URL-friendly identifier'))
+                                    ->columnSpanFull(),
 
-                            Translate::make()
-                                ->hidden()
-                                ->schema([
-                                    Forms\Components\Textarea::make('description')
-                                        ->label(__('Description'))
-                                        ->rows(3),
-                                ])
-                                ->locales(appLocales())
-                                ->columnSpanFull(),
-                        ])
-                        ->collapsible()
-                        ->compact()->columnSpan(3),
+                                Translate::make()
+                                    ->hidden()
+                                    ->schema([
+                                        Forms\Components\Textarea::make('description')
+                                            ->label(__('Description'))
+                                            ->rows(3),
+                                    ])
+                                    ->locales(appLocales())
+                                    ->columnSpanFull(),
+                            ])
+                            ->collapsible()
+                            ->compact(),
+                    ]),
+                Group::make()
+                    ->columnSpan(1)
+                    ->schema([
+                        Section::make(__('Survey Settings'))
+                            ->description(__('Configure survey behavior and assignment'))
+                            ->icon('heroicon-o-cog-6-tooth')
+                            ->schema([
 
-                    Forms\Components\Section::make(__('Survey Settings'))
-                        ->description(__('Configure survey behavior and assignment'))
-                        ->icon('heroicon-o-cog-6-tooth')
-                        ->schema([
+                                Forms\Components\Select::make('survey_category_id')
+                                    ->label(__('Category'))
+                                    ->options(
+                                        SurveyCategory::query()
+                                            ->where('is_active', true)
+                                            ->orderBy('id')
+                                            ->get()
+                                            ->mapWithKeys(fn (SurveyCategory $category) => [
+                                                $category->id => $category->getTranslation('name', app()->getLocale()),
+                                            ])
+                                    )
+                                    ->required()
+                                    ->searchable()
+                                    ->columnSpan(1),
 
-                            Forms\Components\Select::make('survey_category_id')
-                                ->label(__('Category'))
-                                ->options(SurveyCategory::active()->pluck('name', 'id'))
-                                ->required()
-                                ->searchable()
-                                ->columnSpan(1),
+                                Forms\Components\Select::make('status')
+                                    ->label(__('Status'))
+                                    ->options(SurveyStatusEnum::class)
+                                    ->default(SurveyStatusEnum::DRAFT)
+                                    ->required()
+                                    ->native(false)
+                                    ->columnSpan(1),
 
-                            Forms\Components\Select::make('status')
-                                ->label(__('Status'))
-                                ->options(SurveyStatusEnum::class)
-                                ->default(SurveyStatusEnum::DRAFT)
-                                ->required()
-                                ->native(false)
-                                ->columnSpan(1),
+                                Forms\Components\Select::make('branch_id')
+                                    ->label(__('Branch'))
+                                    ->options(Branch::pluck('name', 'id'))
+                                    ->searchable()
+                                    ->required()
+                                    ->placeholder(__('All Branches'))
+                                    ->helperText(__('Leave empty to make survey available for all branches')),
 
-                            Forms\Components\Select::make('branch_id')
-                                ->label(__('Branch'))
-                                ->options(Branch::pluck('name', 'id'))
-                                ->searchable()
-                                ->required()
-                                ->placeholder(__('All Branches'))
-                                ->helperText(__('Leave empty to make survey available for all branches')),
+                                Forms\Components\TextInput::make('max_responses')
+                                    ->label(__('Maximum Responses'))
+                                    ->numeric()
+                                    ->minValue(1)
+                                    ->maxValue(10000)
+                                    ->placeholder(__('Unlimited'))
+                                    ->helperText(__('Leave empty for unlimited responses'))
+                                    ->suffix(__('responses'))
+                                    ->columnSpan(1),
+                            ])
+                            ->collapsible()
+                            ->compact()
+                            ->columns(1),
+                    ]),
 
-                            Forms\Components\TextInput::make('max_responses')
-                                ->label(__('Maximum Responses'))
-                                ->numeric()
-                                ->minValue(1)
-                                ->maxValue(10000)
-                                ->placeholder(__('Unlimited'))
-                                ->helperText(__('Leave empty for unlimited responses'))
-                                ->suffix(__('responses'))
-                                ->columnSpan(1),
-                        ])
-                        ->collapsible()
-                        ->compact()
-                        ->columns(1)
-                        ->columnSpan(1),
-                ]),
-
-                Forms\Components\Section::make(__('Appearance & Theme'))
+                Section::make(__('Appearance & Theme'))
                     ->description(__('Customize the visual appearance of your survey'))
                     ->icon('heroicon-o-swatch')
                     ->schema([
@@ -206,11 +236,11 @@ class SurveyResource extends Resource
                     ->compact()
                     ->columnSpanFull(),
 
-                Forms\Components\Section::make(__('Public Access'))
+                Section::make(__('Public Access'))
                     ->hidden()
                     ->description(__('Enable public access to this survey via a permanent link'))
                     ->icon('heroicon-o-globe-alt')
-                    ->schema([
+                    ->schema(array_filter([
                         Forms\Components\Toggle::make('public_access_enabled')
                             ->label(__('Enable Public Access'))
                             ->helperText(__('When enabled, anyone can access this survey via a permanent link without invitation'))
@@ -230,26 +260,16 @@ class SurveyResource extends Resource
 
                                 return __('Enable public access to generate link');
                             })
-                            ->visible(fn (Get $get, $record): bool => (bool) $get('public_access_enabled') || ($record && $record->public_access_enabled))
+                            ->visible(fn ($get, $record): bool => (bool) $get('public_access_enabled') || ($record && $record->public_access_enabled))
                             ->columnSpanFull(),
 
-                        \LaraZeus\Qr\Components\Qr::make('qr_code_url')
-                            ->optionsColumn('qr_options')
-                            ->asSlideOver()
-                            ->actionIcon('heroicon-o-qr-code')
-                            ->afterStateHydrated(function ($state, callable $set, $record) {
-                                if ($record) {
-                                    $set('qr_code_url', $record->getPublicAccessUrl());
-                                }
-                            })
-                            ->visible(fn (Get $get, $record): bool => (bool) $get('public_access_enabled') || ($record && $record->public_access_enabled))
-                            ->columnSpanFull(),
-                    ])
+                        $qrComponent,
+                    ], fn ($component) => $component !== null))
                     ->collapsible()
                     ->compact()
                     ->columnSpanFull(),
 
-                Forms\Components\Section::make(__('WhatsApp Message Template'))
+                Section::make(__('WhatsApp Message Template'))
                     ->description(__('Customize the WhatsApp invitation message with variables'))
                     ->icon('heroicon-o-chat-bubble-bottom-center-text')
                     ->schema([
@@ -265,17 +285,17 @@ class SurveyResource extends Resource
                                         'undo',
                                         'redo',
                                     ])
-                                    ->required(fn (Get $get): bool => (bool) $get('whatsapp_enabled')),
+                                    ->required(fn ($get): bool => (bool) $get('whatsapp_enabled')),
                             ])
                             ->locales(appLocales())
                             ->columnSpanFull()
-                            ->visible(fn (Get $get): bool => (bool) $get('whatsapp_enabled')),
+                            ->visible(fn ($get): bool => (bool) $get('whatsapp_enabled')),
                     ])
                     ->collapsible()
                     ->compact()
                     ->columnSpanFull(),
 
-                Forms\Components\Section::make(__('Bad Rating Alerts'))
+                Section::make(__('Bad Rating Alerts'))
                     ->description(__('Configure phone numbers to receive WhatsApp alerts when customers give low ratings (2 stars or less)'))
                     ->icon('heroicon-o-exclamation-triangle')
                     ->schema([
@@ -313,7 +333,7 @@ class SurveyResource extends Resource
                     ->compact()
                     ->columnSpanFull(),
 
-                Forms\Components\Section::make(__('Welcome & Thank You Messages'))
+                Section::make(__('Welcome & Thank You Messages'))
                     ->hidden()
                     ->description(__('Customize messages shown to survey participants'))
                     ->icon('heroicon-o-chat-bubble-left-ellipsis')
@@ -594,5 +614,4 @@ class SurveyResource extends Resource
             __('Branch') => $record->branch?->name ?? __('All Branches'),
         ];
     }
-
 }

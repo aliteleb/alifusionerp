@@ -10,6 +10,8 @@ use BackedEnum;
 use Filament\Facades\Filament;
 use Filament\Forms;
 use Filament\Resources\Resource;
+use Filament\Schemas\Components\Group;
+use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables;
@@ -103,250 +105,255 @@ class SurveyResponseResource extends Resource
     public static function form(Schema $schema): Schema
     {
         return $schema
+            ->columns(3)
             ->components([
-                // Response Information
-                Forms\Components\Grid::make(2)->schema([
-                    Forms\Components\Select::make('survey_id')
-                        ->label(__('Survey'))
-                        ->options(function () {
-                            return \App\Models\Survey::orderedByTitle()
-                                ->get()
-                                ->mapWithKeys(function ($survey) {
-                                    return [$survey->id => $survey->getTranslation('title', app()->getLocale())];
-                                });
-                        })
-                        ->searchable()
-                        ->preload()
-                        ->required()
-                        ->live()
-                        ->afterStateUpdated(function (callable $set) {
-                            $set('question_responses', []);
-                        }),
-
-                    Forms\Components\Select::make('customer_id')
-                        ->label(__('Customer'))
-                        ->relationship('customer', 'name')
-                        ->searchableBy(
-                            ['name', 'phone', 'email'],
-                            \App\Models\Customer::class,
-                            labelFormatter: fn ($record) => $record->name.($record->phone ? ' ('.$record->phone.')' : '')
-                        )->preload()
-                        ->required()
-                        ->createOptionForm([
-                            Forms\Components\Grid::make(2)->schema([
-                                Forms\Components\TextInput::make('name')
-                                    ->label(__('Customer Name'))
-                                    ->required()
-                                    ->maxLength(255)
-                                    ->columnSpan(2),
-
-                                PhoneInput::make('phone')
-                                    ->label(__('Phone'))
-                                    ->required()
-                                    ->placeholder(__('Enter phone number'))
-                                    ->helperText(__('Enter phone number with country code'))
-                                    ->prefixIcon('heroicon-o-phone')
-                                    ->unique(Customer::class, 'phone', ignoreRecord: true)
-                                    ->columnSpan(1)
-                                    ->defaultCountry('IQ') // Default to Iraq
-                                    ->displayNumberFormat(PhoneInputNumberType::NATIONAL)
-                                    ->inputNumberFormat(PhoneInputNumberType::INTERNATIONAL),
-
-                                Forms\Components\TextInput::make('email')
-                                    ->label(__('Email Address'))
-                                    ->email()
-                                    ->unique('customers', 'email')
-                                    ->maxLength(255),
-                            ]),
-
-                            Forms\Components\Grid::make(3)->schema([
-                                Forms\Components\Select::make('gender_id')
-                                    ->label(__('Gender'))
-                                    ->relationship(
-                                        name: 'gender',
-                                        titleAttribute: 'name',
-                                        modifyQueryUsing: fn (\Illuminate\Database\Eloquent\Builder $query) => $query->orderByRaw("name->>'".app()->getLocale()."' ASC")
-                                    )
-                                    ->searchable()
-                                    ->preload(),
-
-                                Forms\Components\DatePicker::make('birthday')
-                                    ->label(__('Birth Date'))
-                                    ->maxDate(now()),
-
-                                Forms\Components\Select::make('branch_id')
-                                    ->label(__('Branch'))
-                                    ->relationship(
-                                        name: 'branch',
-                                        titleAttribute: 'name',
-                                        modifyQueryUsing: fn ($query) => $query->orderBy('name->'.app()->getLocale())
-                                    )
-                                    ->required()
-                                    ->searchable()
-                                    ->preload(),
-                            ]),
-
-                            Forms\Components\Textarea::make('address')
-                                ->label(__('Address'))
-                                ->rows(2)
-                                ->columnSpanFull(),
-
-                            Forms\Components\Textarea::make('notes')
-                                ->label(__('Notes'))
-                                ->rows(2)
-                                ->columnSpanFull(),
-                        ])
-                        ->createOptionUsing(function (array $data): int {
-                            // Add current user as creator and default visit time
-                            $data['created_by'] = Auth::id();
-                            $data['updated_by'] = Auth::id();
-                            $data['visit_time'] = $data['visit_time'] ?? now();
-
-                            $customer = \App\Models\Customer::create($data);
-
-                            return $customer->id;
-                        })
-                        ->createOptionModalHeading(__('Create New Customer'))
-                        ->getOptionLabelFromRecordUsing(fn ($record) => $record->name.($record->phone ? ' ('.$record->phone.')' : '')),
-                ]),
-
-                // Status Selection
-                Forms\Components\Section::make(__('Response Status'))
-                    ->icon('heroicon-o-flag')
-                    ->compact()
+                Group::make()
+                    ->columnSpan(2)
                     ->schema([
-                        Forms\Components\ToggleButtons::make('status')
-                            ->label(__('Status'))
-                            ->options(SurveyResponseStatusEnum::class)
-                            ->default(SurveyResponseStatusEnum::DRAFT)
-                            ->inline()
-                            ->required()
-                            ->columnSpanFull(),
-                    ]),
-
-                Forms\Components\Section::make(__('Question Responses'))
-                    ->icon('heroicon-o-chart-pie')
-                    ->compact()
-                    ->schema(function (callable $get) {
-                        $surveyId = $get('survey_id');
-
-                        if (! $surveyId) {
-                            return [
-                                Forms\Components\Placeholder::make('no_survey_selected')
-                                    ->label(__('Please select a survey first'))
-                                    ->content(__('Choose a survey above to see its questions.')),
-                            ];
-                        }
-
-                        $survey = \App\Models\Survey::with('questions')->find($surveyId);
-
-                        if (! $survey || $survey->questions->isEmpty()) {
-                            return [
-                                Forms\Components\Placeholder::make('no_questions')
-                                    ->label(__('No questions found'))
-                                    ->content(__('This survey has no questions configured.')),
-                            ];
-                        }
-
-                        $questionComponents = [];
-
-                        foreach ($survey->questions as $question) {
-                            $questionText = $question->getTranslation('question_text', app()->getLocale());
-                            $questionLabel = __('Question.')."{$question->order}: {$questionText}";
-                            $questionType = $question->question_type->value; // Get enum value
-
-                            // Create different input types based on question type
-                            switch ($questionType) {
-                                case 'text':
-                                    $questionComponents[] = Forms\Components\Textarea::make('question_responses.'.$question->id)
-                                        ->label($questionLabel)
-                                        // ->helperText($question->getTranslation('description', app()->getLocale()))
-                                        ->placeholder($question->getTranslation('placeholder', app()->getLocale()))
-                                        ->required($question->is_required)
-                                        ->rows(3)
-                                        ->columnSpanFull();
-                                    break;
-
-                                case 'rating':
-                                    $min = $question->min_value ?? 1;
-                                    $max = $question->max_value ?? 5;
-
-                                    $questionComponents[] = Rating::make('question_responses.'.$question->id)
-                                        ->label($questionLabel)
-                                        // ->helperText($question->getTranslation('description', app()->getLocale()) . ' (' . __('Rating from :min to :max', ['min' => $min, 'max' => $max]) . ')')
-                                        ->stars($max)
-                                        ->theme(RatingTheme::Simple)
-                                        ->color('warning')
-                                        ->live()
-                                        ->required($question->is_required)
-                                        ->columnSpanFull();
-
-                                    // Add reason field for low ratings (2 stars or less)
-                                    $questionComponents[] = Forms\Components\TextInput::make('question_responses.reason_'.$question->id)
-                                        ->label(__('Reason for low rating'))
-                                        ->placeholder(__('Please explain why you gave this rating...'))
-                                        ->required()
-                                        ->hidden(function ($get, $set) use ($question) {
-                                            if (is_null($get('question_responses.'.$question->id))) {
-                                                $set('question_responses.'.$question->id, 3);
-                                            }
-                                            $rating = $get('question_responses.'.$question->id) ?? 5;
-
-                                            return $rating > 2;
-                                        })
-                                        ->live()
-                                        ->helperText(__('Required when rating is 2 stars or less'))
-                                        ->columnSpanFull();
-                                    break;
-
-                                default:
-                                    // Default to textarea for unknown types (Debug: showing type)
-                                    $questionComponents[] = Forms\Components\Textarea::make('question_responses.'.$question->id)
-                                        ->label($questionLabel.' (TYPE: '.$questionType.')')
-                                        ->helperText($question->getTranslation('description', app()->getLocale()))
-                                        ->placeholder($question->getTranslation('placeholder', app()->getLocale()))
-                                        ->required($question->is_required)
-                                        ->columnSpanFull();
-                                    break;
-                            }
-                        }
-
-                        return $questionComponents;
-                    }),
-
-                Forms\Components\Section::make(__('More Information'))
-                    ->icon('heroicon-o-chart-pie')
-                    ->compact()
-                    ->collapsed()
-                    ->schema([
-                        Forms\Components\Hidden::make('started_at')
-                            ->label(__('Started At'))
-                            ->default(now())
-                            ->required(),
-                        Forms\Components\Grid::make(2)
+                        Section::make(__('Response Details'))
+                            ->columns(2)
                             ->schema([
-                                Forms\Components\Toggle::make('is_complete')
-                                    ->label(__('Complete'))
-                                    ->default(true),
+                                Forms\Components\Select::make('survey_id')
+                                    ->label(__('Survey'))
+                                    ->options(function () {
+                                        return \App\Models\Survey::orderedByTitle()
+                                            ->get()
+                                            ->mapWithKeys(function ($survey) {
+                                                return [$survey->id => $survey->getTranslation('title', app()->getLocale())];
+                                            });
+                                    })
+                                    ->searchable()
+                                    ->preload()
+                                    ->required()
+                                    ->live()
+                                    ->afterStateUpdated(function (callable $set) {
+                                        $set('question_responses', []);
+                                    }),
 
-                                Forms\Components\Toggle::make('is_verified')
-                                    ->label(__('Verified'))
-                                    ->default(true),
+                                Forms\Components\Select::make('customer_id')
+                                    ->label(__('Customer'))
+                                    ->relationship('customer', 'name')
+                                    ->searchableBy(
+                                        ['name', 'phone', 'email'],
+                                        \App\Models\Customer::class,
+                                        labelFormatter: fn ($record) => $record->name.($record->phone ? ' ('.$record->phone.')' : '')
+                                    )->preload()
+                                    ->required()
+                                    ->createOptionForm([
+                                        Section::make(__('Primary Details'))
+                                            ->columns(2)
+                                            ->schema([
+                                                Forms\Components\TextInput::make('name')
+                                                    ->label(__('Customer Name'))
+                                                    ->required()
+                                                    ->maxLength(255)
+                                                    ->columnSpan(2),
 
-                                // Forms\Components\Toggle::make('is_anonymous')
-                                //     ->label(__('Anonymous'))
-                                //     ->default(false),
+                                                PhoneInput::make('phone')
+                                                    ->label(__('Phone'))
+                                                    ->required()
+                                                    ->placeholder(__('Enter phone number'))
+                                                    ->helperText(__('Enter phone number with country code'))
+                                                    ->prefixIcon('heroicon-o-phone')
+                                                    ->unique(Customer::class, 'phone', ignoreRecord: true)
+                                                    ->defaultCountry('IQ')
+                                                    ->displayNumberFormat(PhoneInputNumberType::NATIONAL)
+                                                    ->inputNumberFormat(PhoneInputNumberType::INTERNATIONAL),
+
+                                                Forms\Components\TextInput::make('email')
+                                                    ->label(__('Email Address'))
+                                                    ->email()
+                                                    ->unique('customers', 'email')
+                                                    ->maxLength(255),
+                                            ]),
+
+                                        Section::make(__('Additional Details'))
+                                            ->columns(3)
+                                            ->schema([
+                                                Forms\Components\Select::make('gender_id')
+                                                    ->label(__('Gender'))
+                                                    ->relationship(
+                                                        name: 'gender',
+                                                        titleAttribute: 'name',
+                                                        modifyQueryUsing: fn (Builder $query) => $query->orderByRaw("name->>'".app()->getLocale()."' ASC")
+                                                    )
+                                                    ->searchable()
+                                                    ->preload(),
+
+                                                Forms\Components\DatePicker::make('birthday')
+                                                    ->label(__('Birth Date'))
+                                                    ->maxDate(now()),
+
+                                                Forms\Components\Select::make('branch_id')
+                                                    ->label(__('Branch'))
+                                                    ->relationship(
+                                                        name: 'branch',
+                                                        titleAttribute: 'name',
+                                                        modifyQueryUsing: fn ($query) => $query->orderBy('name->'.app()->getLocale())
+                                                    )
+                                                    ->required()
+                                                    ->searchable()
+                                                    ->preload(),
+                                            ]),
+
+                                        Section::make(__('Contact Information'))
+                                            ->columns(1)
+                                            ->schema([
+                                                Forms\Components\Textarea::make('address')
+                                                    ->label(__('Address'))
+                                                    ->rows(2),
+
+                                                Forms\Components\Textarea::make('notes')
+                                                    ->label(__('Notes'))
+                                                    ->rows(2),
+                                            ]),
+                                    ])
+                                    ->createOptionUsing(function (array $data): int {
+                                        $data['created_by'] = Auth::id();
+                                        $data['updated_by'] = Auth::id();
+                                        $data['visit_time'] = $data['visit_time'] ?? now();
+
+                                        $customer = \App\Models\Customer::create($data);
+
+                                        return $customer->id;
+                                    })
+                                    ->createOptionModalHeading(__('Create New Customer'))
+                                    ->getOptionLabelFromRecordUsing(fn ($record) => $record->name.($record->phone ? ' ('.$record->phone.')' : '')),
                             ]),
-                        Forms\Components\Textarea::make('feedback')
-                            ->label(__('Additional Feedback'))
-                            ->rows(3)
-                            ->columnSpanFull(),
-                        Forms\Components\Textarea::make('notes')
-                            ->label(__('Internal Notes'))
-                            ->rows(2)
-                            ->helperText(__('Internal notes - not visible to customer'))
-                            ->columnSpanFull(),
+
+                        Section::make(__('Question Responses'))
+                            ->icon('heroicon-o-chart-pie')
+                            ->compact()
+                            ->schema(function (callable $get) {
+                                $surveyId = $get('survey_id');
+
+                                if (! $surveyId) {
+                                    return [
+                                        Forms\Components\Placeholder::make('no_survey_selected')
+                                            ->label(__('Please select a survey first'))
+                                            ->content(__('Choose a survey above to see its questions.')),
+                                    ];
+                                }
+
+                                $survey = \App\Models\Survey::with('questions')->find($surveyId);
+
+                                if (! $survey || $survey->questions->isEmpty()) {
+                                    return [
+                                        Forms\Components\Placeholder::make('no_questions')
+                                            ->label(__('No questions found'))
+                                            ->content(__('This survey has no questions configured.')),
+                                    ];
+                                }
+
+                                $questionComponents = [];
+
+                                foreach ($survey->questions as $question) {
+                                    $questionText = $question->getTranslation('question_text', app()->getLocale());
+                                    $questionLabel = __('Question.')."{$question->order}: {$questionText}";
+                                    $questionType = $question->question_type->value; // Get enum value
+
+                                    // Create different input types based on question type
+                                    switch ($questionType) {
+                                        case 'text':
+                                            $questionComponents[] = Forms\Components\Textarea::make('question_responses.'.$question->id)
+                                                ->label($questionLabel)
+                                                // ->helperText($question->getTranslation('description', app()->getLocale()))
+                                                ->placeholder($question->getTranslation('placeholder', app()->getLocale()))
+                                                ->required($question->is_required)
+                                                ->rows(3)
+                                                ->columnSpanFull();
+                                            break;
+
+                                        case 'rating':
+                                            $min = $question->min_value ?? 1;
+                                            $max = $question->max_value ?? 5;
+
+                                            $questionComponents[] = Rating::make('question_responses.'.$question->id)
+                                                ->label($questionLabel)
+                                                // ->helperText($question->getTranslation('description', app()->getLocale()) . ' (' . __('Rating from :min to :max', ['min' => $min, 'max' => $max]) . ')')
+                                                ->stars($max)
+                                                ->theme(RatingTheme::Simple)
+                                                ->color('warning')
+                                                ->live()
+                                                ->required($question->is_required)
+                                                ->columnSpanFull();
+
+                                            // Add reason field for low ratings (2 stars or less)
+                                            $questionComponents[] = Forms\Components\TextInput::make('question_responses.reason_'.$question->id)
+                                                ->label(__('Reason for low rating'))
+                                                ->placeholder(__('Please explain why you gave this rating...'))
+                                                ->required()
+                                                ->hidden(function ($get, $set) use ($question) {
+                                                    if (is_null($get('question_responses.'.$question->id))) {
+                                                        $set('question_responses.'.$question->id, 3);
+                                                    }
+                                                    $rating = $get('question_responses.'.$question->id) ?? 5;
+
+                                                    return $rating > 2;
+                                                })
+                                                ->live()
+                                                ->helperText(__('Required when rating is 2 stars or less'))
+                                                ->columnSpanFull();
+                                            break;
+
+                                        default:
+                                            // Default to textarea for unknown types (Debug: showing type)
+                                            $questionComponents[] = Forms\Components\Textarea::make('question_responses.'.$question->id)
+                                                ->label($questionLabel.' (TYPE: '.$questionType.')')
+                                                ->helperText($question->getTranslation('description', app()->getLocale()))
+                                                ->placeholder($question->getTranslation('placeholder', app()->getLocale()))
+                                                ->required($question->is_required)
+                                                ->columnSpanFull();
+                                            break;
+                                    }
+                                }
+
+                                return $questionComponents;
+                            }),
                     ]),
+                Group::make()
+                    ->columnSpan(1)
+                    ->schema([
+                                Section::make(__('Response Status'))
+                                    ->icon('heroicon-o-flag')
+                                    ->schema([
+                                        Forms\Components\ToggleButtons::make('status')
+                                            ->label(__('Status'))
+                                            ->options(SurveyResponseStatusEnum::class)
+                                            ->default(SurveyResponseStatusEnum::DRAFT)
+                                            ->inline()
+                                            ->required()
+                                            ->columnSpanFull(),
+                                    ]),
+
+                                Section::make(__('More Information'))
+                                    ->icon('heroicon-o-chart-pie')
+                                    ->compact()
+                                    ->collapsed()
+                                    ->columns(2)
+                                    ->schema([
+                                        Forms\Components\Hidden::make('started_at')
+                                            ->label(__('Started At'))
+                                            ->default(now())
+                                            ->required()
+                                            ->columnSpanFull(),
+                                        Forms\Components\Toggle::make('is_complete')
+                                            ->label(__('Complete'))
+                                            ->default(true),
+                                        Forms\Components\Toggle::make('is_verified')
+                                            ->label(__('Verified'))
+                                            ->default(true),
+                                        Forms\Components\Textarea::make('feedback')
+                                            ->label(__('Additional Feedback'))
+                                            ->rows(3)
+                                            ->columnSpanFull(),
+                                        Forms\Components\Textarea::make('notes')
+                                            ->label(__('Internal Notes'))
+                                            ->rows(2)
+                                            ->helperText(__('Internal notes - not visible to customer'))
+                                            ->columnSpanFull(),
+                                    ]),
+                            ]),
                 // Response Statistics (read-only)
                 // Forms\Components\Section::make(__('Response Statistics'))
                 //     ->description(__('Automatically calculated statistics'))
@@ -603,7 +610,7 @@ class SurveyResponseResource extends Resource
                     }),
             ])
             ->actions([
-                Tables\Actions\EditAction::make()
+                \Filament\Actions\EditAction::make()
                     ->color('warning')
                     ->iconButton()
                     ->mutateFormDataUsing(function (array $data): array {
@@ -611,22 +618,22 @@ class SurveyResponseResource extends Resource
 
                         return $data;
                     }),
-                Tables\Actions\DeleteAction::make()
+                \Filament\Actions\DeleteAction::make()
                     ->color('danger')
                     ->iconButton(),
-                Tables\Actions\RestoreAction::make()
+                \Filament\Actions\RestoreAction::make()
                     ->color('success')
                     ->iconButton(),
-                Tables\Actions\ForceDeleteAction::make()
+                \Filament\Actions\ForceDeleteAction::make()
                     ->color('danger')
                     ->iconButton(),
             ])
             ->bulkActions([
-                Tables\Actions\BulkActionGroup::make([
-                    Tables\Actions\DeleteBulkAction::make(),
-                    Tables\Actions\RestoreBulkAction::make(),
-                    Tables\Actions\ForceDeleteBulkAction::make(),
-                    Tables\Actions\BulkAction::make('mark_verified')
+                \Filament\Actions\BulkActionGroup::make([
+                    \Filament\Actions\DeleteBulkAction::make(),
+                    \Filament\Actions\RestoreBulkAction::make(),
+                    \Filament\Actions\ForceDeleteBulkAction::make(),
+                    \Filament\Actions\BulkAction::make('mark_verified')
                         ->label(__('Mark as Verified'))
                         ->icon('heroicon-o-shield-check')
                         ->color('success')
@@ -637,7 +644,7 @@ class SurveyResponseResource extends Resource
                             ]));
                         })
                         ->requiresConfirmation(),
-                    Tables\Actions\BulkAction::make('mark_unverified')
+                    \Filament\Actions\BulkAction::make('mark_unverified')
                         ->label(__('Mark as Unverified'))
                         ->icon('heroicon-o-shield-exclamation')
                         ->color('warning')
